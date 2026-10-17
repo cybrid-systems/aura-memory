@@ -12,6 +12,7 @@ from __future__ import annotations
 import random
 
 from .control import AuraMemory
+from .proposer import get_proposer
 from .stream import stream
 
 MODES = ("append", "fixed", "adaptive", "adaptive-nogate")
@@ -22,6 +23,7 @@ def run(mode: str, seed: int, n: int = 600, noise: float = 0.0, p_correct: float
     policy = "append" if mode == "append" else "seed"
     learn = mode.startswith("adaptive")
     m = AuraMemory(policy=policy, learn=learn, min_evidence=min_evidence, window=window)
+    proposer = get_proposer()
     evs = stream(seed, n)
     q = []          # per query: (ts, phase, cat, correct, stale, empty)
     corrections = 0
@@ -45,6 +47,9 @@ def run(mode: str, seed: int, n: int = 600, noise: float = 0.0, p_correct: float
                     r = m.correct(e.key, e.truth, e.cat, noisy=urng.random() < noise)
             sizes.append(r["size"])
             if r.get("propose"):
+                src = m.policy()["source"] if type(proposer).__name__ != "Proposer" else ""
+                for c in proposer.propose(r["propose"]["why"], r["propose"]["candidates"], src):
+                    m.call("ADDCAND", *c)
                 v = m.gate() if mode == "adaptive" else m.apply()
                 verdicts.append({"ts": e.ts, "verdict": v["verdict"], "chosen": v.get("chosen"),
                                  "why": r["propose"]["why"], "candidates": r["propose"]["candidates"],

@@ -1,0 +1,37 @@
+;; In-process latency micro-benchmark for the memory control plane (one Aura process, no host round trip).
+;; Aura only has a millisecond clock (current-time-ms), so each step is looped N times and averaged.
+;;   plain_loop_*   : a host-program loop before vs after the first set-code (cybrid-systems/aura#4585)
+;;   policy_call    : one workspace policy call (admit)
+;;   rebind_eval    : mutate:rebind of `resolve` + eval-current
+;;   trial_cycle    : ast:snapshot -> rebind -> eval-current -> policy call -> ast:restore -> eval-current
+;;                    (what the gate pays per candidate worldline, without the replay itself)
+(define N (if (getenv "N") (string->number (getenv "N")) 100))
+(define policy (read-file "aura/policy_seed.aura"))
+(define res-a "(lambda (cat) (cond ((equal? cat \"pref\") \"latest\") ((equal? cat \"fact\") \"keep-first\") (else \"latest\")))")
+(define res-b "(lambda (cat) (cond ((equal? cat \"pref\") \"keep-first\") ((equal? cat \"fact\") \"keep-first\") (else \"latest\")))")
+(define (times n thunk) (if (<= n 0) #t (begin (thunk n) (times (- n 1) thunk))))
+(define (us-per n thunk)
+  (let ((t0 (current-time-ms)))
+    (times n thunk)
+    (/ (* 1000.0 (- (current-time-ms) t0)) n)))
+(define items (let loop ((i 0) (acc (list))) (if (= i 200) acc (loop (+ i 1) (cons (list i (string-append "k" (number->string i)) "v") acc)))))
+(define (scan) (length (filter (lambda (it) (equal? (list-ref it 1) "k7")) items)))
+
+(define r-plain-before (us-per (* 5 N) (lambda (i) (scan))))
+(set-code policy) (eval-current)
+(define r-plain-after (us-per (* 5 N) (lambda (i) (scan))))
+(define r-call (us-per (* 50 N) (lambda (i) (admit "pref" "user"))))
+(define r-rebind-eval (us-per N (lambda (i) (mutate:rebind "resolve" (if (even? i) res-a res-b) "bench") (eval-current))))
+(define r-snapshot (us-per N (lambda (i) (ast:snapshot "bench"))))
+(define s0 (ast:snapshot "base"))
+(define r-restore (us-per N (lambda (i) (ast:restore s0) (eval-current))))
+(define r-trial (us-per N (lambda (i)
+  (let ((s (ast:snapshot "trial")))
+    (mutate:rebind "resolve" res-a "bench") (eval-current) (resolve "pref")
+    (ast:restore s) (eval-current)))))
+(display "BENCH ")
+(display (json-encode (hash "n" N "plain_loop_200_items_before_set_code_us" r-plain-before
+                            "plain_loop_200_items_after_set_code_us" r-plain-after
+                            "policy_call_us" r-call "rebind_eval_us" r-rebind-eval "snapshot_us" r-snapshot
+                            "restore_eval_us" r-restore "trial_cycle_us" r-trial)))
+(newline)

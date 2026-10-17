@@ -1,0 +1,16 @@
+;; aura-memory's own shape: snapshot, rebind two policy defines, eval-current, restore -> source byte-identical,
+;; behaviour back to the seed; then rebind again and keep.
+(set-code (read-file "../../aura/policy_seed.aura"))
+(eval-current)
+(define src0 (current-source :workspace))
+(define s (ast:snapshot "gate"))
+(mutate:rebind "resolve" "(lambda (cat) (cond ((equal? cat \"pref\") \"latest\") (else \"latest\")))" "trial")
+(mutate:rebind "admit" "(lambda (cat src) (cond ((and (equal? cat \"project\") (equal? src \"teammate\")) #t) ((equal? src \"user\") #t) (else #f)))" "trial")
+(eval-current)
+(define trial-ok (and (equal? (resolve "pref") "latest") (admit "project" "teammate")))
+(ast:restore s)
+(eval-current)
+(define back-ok (and (equal? (current-source :workspace) src0) (equal? (resolve "pref") "keep-first") (not (admit "project" "teammate"))))
+(mutate:rebind "ttl" "(lambda (cat) (cond ((equal? cat \"episodic\") 60) (else 0)))" "keep")
+(eval-current)
+(display (list "cycle" trial-ok back-ok (= (ttl "episodic") 60))) (newline)

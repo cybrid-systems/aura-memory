@@ -226,16 +226,26 @@
                              (list "outranked" (list (list "resolve" cat "latest")))
                              (list "unexplained" (list)))))))))))))
 
+;; a candidate that would not change the current policy is not a proposal
+(define (noop-cand? c)
+  (let ((kind (car c)) (cat (cadr c)))
+    (cond ((equal? kind "admit") (and (not (equal? (list-ref c 3) "flip")) (eq? (p-admit cat (caddr c)) (equal? (list-ref c 3) "1"))))
+          ((equal? kind "resolve") (equal? (p-resolve cat) (caddr c)))
+          ((equal? kind "ttl") (= (p-ttl cat) (caddr c)))
+          ((equal? kind "promote") (= (p-promote cat) (caddr c)))
+          (else #t))))
+(define (live-cands cs) (filter (lambda (c) (not (noop-cand? c))) cs))
 (define (allowed? sig n) (let ((at (hash-ref *blacklist* sig 0))) (or (= at 0) (>= n (* 2 at)))))
-(define (consider! why cands)
-  (if (or (not *learn*) *pending* (null? cands))
-      #f
-      (let* ((sig (cand->str (car cands)))
-             (n (+ 1 (hash-ref *evidence* sig 0))))
-        (hash-set! *evidence* sig n)
-        (if (and (>= n *min-evidence*) (allowed? sig n))
-            (begin (set! *pending* (list cands why sig n)) #t)
-            #f))))
+(define (consider! why cands0)
+  (let ((cands (live-cands cands0)))
+    (if (or (not *learn*) *pending* (null? cands))
+        #f
+        (let* ((sig (cand->str (car cands)))
+               (n (+ 1 (hash-ref *evidence* sig 0))))
+          (hash-set! *evidence* sig n)
+          (if (and (>= n *min-evidence*) (allowed? sig n))
+              (begin (set! *pending* (list cands why sig n)) #t)
+              #f)))))
 
 ;; size pressure: categories with many never-retrieved, untouched, unpinned short-term items
 (define (dead-count cat now)
@@ -409,6 +419,17 @@
     (cond
       ((equal? cmd "EV") (reply (live-event! (field fs 1) (field fs 2) (field fs 3) (field fs 4) (field fs 5) (field fs 6))))
       ((equal? cmd "GATE") (reply (if *pending* (gate!) (hash "error" "no pending proposal"))))
+      ((equal? cmd "ADDCAND")    ;; extra candidate from an external proposer (e.g. an LLM), same grammar as the learner's
+       (if *pending*
+           (let ((c (list (field fs 1) (field fs 2)
+                          (if (or (equal? (field fs 1) "ttl") (equal? (field fs 1) "promote")) (fnum fs 3) (field fs 3))
+                          (field fs 4))))
+             (if (and (member (car c) (list "admit" "resolve" "ttl" "promote")) (member (cadr c) cats)
+                      (not (noop-cand? c)))
+                 (begin (set! *pending* (cons (append (car *pending*) (list c)) (cdr *pending*)))
+                        (reply (hash "ok" #t "candidates" (map cand->str (car *pending*)))))
+                 (reply (hash "ok" #f "reason" "rejected candidate"))))
+           (reply (hash "error" "no pending proposal"))))
       ((equal? cmd "APPLY") (reply (if *pending* (apply-ungated!) (hash "error" "no pending proposal"))))
       ((equal? cmd "LIST")
        (reply (hash "items" (map it->hash (if (equal? (field fs 1) "") *items*
