@@ -1,0 +1,14 @@
+== in-process latency
+inside Aura (µs per op, current-time-ms clock, N=100)
+  policy_call_us                     79.0
+  snapshot_us                      4180.0
+  plain_loop_200_items_before_set_code_us     1180.0
+  trial_cycle_us                  14620.0
+  restore_eval_us                  6470.0
+  plain_loop_200_items_after_set_code_us     1324.0
+  rebind_eval_us                   2950.0
+
+
+aura#4585 ablation, fixed policy, seed 0, host round trip per QUERY (same event stream; measured while another bench ran):
+  policy in the workspace via set-code (server.aura):       p50 23217 us  p90 45246 us
+  same policy as plain program defines, no set-code:          p50  3719 us  p90  5551 us

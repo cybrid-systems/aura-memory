@@ -1,0 +1,39 @@
+{
+ "mode": "adaptive",
+ "seed": 0,
+ "n": 600,
+ "noise": 0.0,
+ "queries": 201,
+ "accuracy": 0.945273631840796,
+ "window_accuracy": [
+  0.9027777777777778,
+  0.9402985074626866,
+  1.0
+ ],
+ "stale_rate": 0.03980099502487562,
+ "empty_rate": 0.014925373134328358,
+ "by_cat": {
+  "pref": 0.9385964912280702,
+  "fact": 1.0,
+  "project": 0.8181818181818182,
+  "episodic": 1.0
+ },
+ "corrections": 8,
+ "size_final": 28,
+ "size_mean": 25.53,
+ "proposals": 4,
+ "keep": 3,
+ "rollback": 1,
+ "kept": [
+  "resolve\tpref\tlatest",
+  "ttl\tepisodic\t60",
+  "admit\tproject\tteammate\t1"
+ ],
+ "query_us_p50": 19306.579997646622,
+ "query_us_p99": 80794.32699014433,
+ "write_us_p50": 10378.562001278624,
+ "mutation_ms_p50": 3390.0495450070594,
+ "mutation_ms_max": 5651.731619989732,
+ "startup_ms": 124.70673200732563,
+ "wall_s": 25.621268385002622
+}

@@ -1,0 +1,126 @@
+[
+ {
+  "snap": 1,
+  "window": [
+   0,
+   83
+  ],
+  "why": "rejected user.meeting",
+  "verdict": "ROLLBACK",
+  "version": 0,
+  "scores": [
+   {
+    "size": 18,
+    "correct": 20,
+    "labeled": 24
+   },
+   {
+    "size": 18,
+    "correct": 20,
+    "labeled": 24
+   }
+  ],
+  "ts": 83,
+  "candidates": [
+   "admit\tpref\tassistant\t1"
+  ],
+  "ms": 1599,
+  "chosen": false
+ },
+ {
+  "snap": 2,
+  "window": [
+   0,
+   100
+  ],
+  "why": "lost-conflict user.coffee",
+  "verdict": "KEEP",
+  "version": 1,
+  "scores": [
+   {
+    "size": 19,
+    "correct": 26,
+    "labeled": 32
+   },
+   {
+    "size": 19,
+    "correct": 30,
+    "labeled": 32
+   },
+   {
+    "size": 25,
+    "correct": 30,
+    "labeled": 32
+   }
+  ],
+  "ts": 100,
+  "candidates": [
+   "resolve\tpref\tlatest",
+   "resolve\tpref\tkeep-both"
+  ],
+  "ms": 3228,
+  "chosen": "resolve\tpref\tlatest"
+ },
+ {
+  "snap": 3,
+  "window": [
+   180,
+   299
+  ],
+  "why": "size: 12 dead items in episodic",
+  "verdict": "KEEP",
+  "version": 2,
+  "scores": [
+   {
+    "size": 40,
+    "correct": 50,
+    "labeled": 50
+   },
+   {
+    "size": 22,
+    "correct": 50,
+    "labeled": 50
+   },
+   {
+    "size": 28,
+    "correct": 50,
+    "labeled": 50
+   }
+  ],
+  "ts": 299,
+  "candidates": [
+   "ttl\tepisodic\t60",
+   "ttl\tepisodic\t120"
+  ],
+  "ms": 5648,
+  "chosen": "ttl\tepisodic\t60"
+ },
+ {
+  "snap": 4,
+  "window": [
+   240,
+   354
+  ],
+  "why": "rejected proj.beta.status",
+  "verdict": "KEEP",
+  "version": 3,
+  "scores": [
+   {
+    "size": 22,
+    "correct": 41,
+    "labeled": 43
+   },
+   {
+    "size": 26,
+    "correct": 43,
+    "labeled": 43
+   }
+  ],
+  "ts": 354,
+  "candidates": [
+   "admit\tproject\tteammate\t1"
+  ],
+  "ms": 3387,
+  "chosen": "admit\tproject\tteammate\t1"
+ }
+]

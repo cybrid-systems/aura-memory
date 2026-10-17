@@ -1,0 +1,98 @@
+[
+ {
+  "ts": 80,
+  "verdict": "ROLLBACK",
+  "chosen": false,
+  "why": "rejected user.meeting",
+  "candidates": [
+   "admit\tpref\tassistant\t1"
+  ],
+  "scores": [
+   {
+    "size": 18,
+    "correct": 20,
+    "labeled": 24
+   },
+   {
+    "size": 18,
+    "correct": 20,
+    "labeled": 24
+   }
+  ]
+ },
+ {
+  "ts": 96,
+  "verdict": "KEEP",
+  "chosen": "resolve\tpref\tlatest",
+  "why": "lost-conflict user.coffee",
+  "candidates": [
+   "resolve\tpref\tlatest",
+   "resolve\tpref\tkeep-both"
+  ],
+  "scores": [
+   {
+    "size": 19,
+    "correct": 26,
+    "labeled": 32
+   },
+   {
+    "size": 19,
+    "correct": 30,
+    "labeled": 32
+   },
+   {
+    "size": 25,
+    "correct": 30,
+    "labeled": 32
+   }
+  ]
+ },
+ {
+  "ts": 294,
+  "verdict": "KEEP",
+  "chosen": "ttl\tepisodic\t60",
+  "why": "size: 12 dead items in episodic",
+  "candidates": [
+   "ttl\tepisodic\t60",
+   "ttl\tepisodic\t120"
+  ],
+  "scores": [
+   {
+    "size": 40,
+    "correct": 50,
+    "labeled": 50
+   },
+   {
+    "size": 22,
+    "correct": 50,
+    "labeled": 50
+   },
+   {
+    "size": 28,
+    "correct": 50,
+    "labeled": 50
+   }
+  ]
+ },
+ {
+  "ts": 347,
+  "verdict": "KEEP",
+  "chosen": "admit\tproject\tteammate\t1",
+  "why": "rejected proj.beta.status",
+  "candidates": [
+   "admit\tproject\tteammate\t1"
+  ],
+  "scores": [
+   {
+    "size": 22,
+    "correct": 41,
+    "labeled": 43
+   },
+   {
+    "size": 26,
+    "correct": 43,
+    "labeled": 43
+   }
+  ]
+ }
+]
