@@ -1,0 +1,6 @@
+;; aura-memory "append-only" baseline (RAG-style): keep everything, no forgetting, newest mention wins.
+(define admit (lambda (cat src) #t))
+(define resolve (lambda (cat) "keep-both"))
+(define ttl (lambda (cat) 0))
+(define promote-at (lambda (cat) 1000000))
+(define src-weight (lambda (src) 0))

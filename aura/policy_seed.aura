@@ -1,0 +1,39 @@
+;; aura-memory seed memory-management policy (version 0), loaded with set-code + eval-current.
+;; This is the "fixed white-box" policy: conservative, readable rules. The learner in server.aura rewrites
+;; these defines with mutate:rebind (compiled from its rule tables) and undoes them with ast:restore.
+;; WORKAROUND cybrid-systems/aura#4583 / #4584: no self-recursive defines and no filter/map in the workspace;
+;; every define here is a flat cond so rebinding stays cheap and dispatch stays correct.
+
+;; admit: should an offered write (category, source) enter memory at all?
+(define admit
+  (lambda (cat src)
+    (cond ((equal? src "user") #t)
+          (else #f))))
+
+;; resolve: what happens when a key already holds a different value
+;;   "keep-first" = never silently overwrite (explicit correction needed), "latest" = newest wins,
+;;   "keep-both"  = keep every value; retrieval ranks them with src-weight + recency.
+(define resolve
+  (lambda (cat)
+    (cond ((equal? cat "pref") "keep-first")
+          ((equal? cat "fact") "keep-first")
+          (else "latest"))))
+
+;; ttl: forget an unpinned short-term item not touched for this many events (0 = never forget)
+(define ttl
+  (lambda (cat)
+    (cond (else 0))))
+
+;; promote-at: retrieval hits after which an item moves to the long-term tier (immune to ttl)
+(define promote-at
+  (lambda (cat)
+    (cond (else 2))))
+
+;; src-weight: retrieval rank weight of a source when several values for one key survive
+(define src-weight
+  (lambda (src)
+    (cond ((equal? src "correction") 3)
+          ((equal? src "user") 3)
+          ((equal? src "teammate") 1)
+          ((equal? src "assistant") 1)
+          (else 0))))
