@@ -16,7 +16,7 @@
 
 (define *policy-path* (if (getenv "AURA_MEMORY_POLICY") (getenv "AURA_MEMORY_POLICY") "aura/policy_seed.aura"))
 (define *min-evidence* (if (getenv "AURA_MEMORY_MIN_EVIDENCE") (string->number (getenv "AURA_MEMORY_MIN_EVIDENCE")) 2))
-(define *window* (if (getenv "AURA_MEMORY_WINDOW") (string->number (getenv "AURA_MEMORY_WINDOW")) 60))
+(define *window* (if (getenv "AURA_MEMORY_WINDOW") (string->number (getenv "AURA_MEMORY_WINDOW")) 100))
 (define *ck-every* 20)
 (define *sweep-every* 10)
 (define *dead-age* 60)
@@ -192,7 +192,7 @@
           (map (lambda (c) (list "promote" c 1)) cats)))
 (define (str-hash s) (apply + (map char->integer (string->list s))))
 (define (resolve-flip c)
-  (if (equal? (list-ref c 3) "flip")
+  (if (and (equal? (car c) "admit") (equal? (list-ref c 3) "flip"))
       (list "admit" (list-ref c 1) (list-ref c 2) (if (p-admit (list-ref c 1) (list-ref c 2)) "0" "1"))
       c))
 
@@ -287,12 +287,15 @@
 (define (window-events from)
   (let loop ((es *events*) (acc (list)))
     (if (or (null? es) (< (ev-ts (car es)) from)) acc (loop (cdr es) (cons (car es) acc)))))
-;; -> (list correct labeled size)
+;; -> (list correct labeled size).  User corrections are labels, not inputs: the counterfactual worldline has to
+;; keep memory right on its own, so CORRECT events are skipped (their value already labels the query they answer).
 (define (replay items evs)
   (let loop ((items items) (evs evs) (ok 0) (n 0))
     (if (null? evs)
         (list ok n (length items))
-        (let* ((e (car evs)) (r (apply-ev items e *version*)) (lab (ev-label e)))
+        (let* ((e (car evs))
+               (r (if (equal? (ev-kind e) "CORRECT") (list items "skip" -1 "" (list)) (apply-ev items e *version*)))
+               (lab (ev-label e)))
           (if (and (equal? (ev-kind e) "QUERY") (not (equal? lab "")))
               (loop (car r) (cdr evs) (if (equal? (list-ref r 3) lab) (+ ok 1) ok) (+ n 1))
               (loop (car r) (cdr evs) ok n))))))
