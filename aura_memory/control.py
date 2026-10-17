@@ -95,10 +95,11 @@ class AuraMemory:
 
     # white-box ops
     def list(self, cat: str = ""):
-        return self.call("LIST", cat)["items"]
+        return self.call("LIST", cat)["items"] or []      # Aura json-encode renders '() as null
 
     def get(self, key):
-        return self.call("GET", key)
+        g = self.call("GET", key)
+        return {k: (v or []) for k, v in g.items()}
 
     def edit(self, item_id, val):
         return self.call("EDIT", item_id, val)
@@ -116,7 +117,8 @@ class AuraMemory:
         return self.call("POLICY")
 
     def versions(self):
-        return self.call("VERSIONS")["versions"]
+        return [dict(v, scores=v.get("scores") or [], candidates=v.get("candidates") or [])
+                for v in (self.call("VERSIONS")["versions"] or [])]
 
     def stats(self):
         return self.call("STATS")
