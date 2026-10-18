@@ -1,0 +1,166 @@
+[
+ {
+  "n": 20000,
+  "k": 0,
+  "gate_ms": 7222.4,
+  "verdict": "KEEP",
+  "chosen": "ttl\tepisodic\t5\toverfit",
+  "scores": [
+   {
+    "size": 20062,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 22,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 43,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 4,
+    "correct": 68,
+    "labeled": 69
+   }
+  ],
+  "rss_before_mb": 253.3,
+  "rss_after_mb": 273.9,
+  "size_after": 20062
+ },
+ {
+  "n": 20000,
+  "k": 1,
+  "gate_ms": 11876.5,
+  "verdict": "KEEP",
+  "chosen": "ttl\tepisodic\t60",
+  "scores": [
+   {
+    "size": 20062,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 22,
+    "correct": 68,
+    "heldout": {
+     "base": 86,
+     "correct": 86,
+     "veto": false,
+     "labeled": 86
+    },
+    "labeled": 69
+   },
+   {
+    "size": 43,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 4,
+    "correct": 68,
+    "heldout": {
+     "base": 86,
+     "correct": 83,
+     "veto": true,
+     "labeled": 86
+    },
+    "labeled": 69
+   }
+  ],
+  "rss_before_mb": 253.1,
+  "rss_after_mb": 253.4,
+  "size_after": 20062
+ },
+ {
+  "n": 20000,
+  "k": 2,
+  "gate_ms": 16039.0,
+  "verdict": "KEEP",
+  "chosen": "ttl\tepisodic\t60",
+  "scores": [
+   {
+    "size": 20062,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 22,
+    "correct": 68,
+    "heldout": {
+     "base": 177,
+     "correct": 177,
+     "veto": false,
+     "labeled": 177
+    },
+    "labeled": 69
+   },
+   {
+    "size": 43,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 4,
+    "correct": 68,
+    "heldout": {
+     "base": 177,
+     "correct": 170,
+     "veto": true,
+     "labeled": 177
+    },
+    "labeled": 69
+   }
+  ],
+  "rss_before_mb": 254.1,
+  "rss_after_mb": 250.2,
+  "size_after": 20062
+ },
+ {
+  "n": 20000,
+  "k": 4,
+  "gate_ms": 20789.6,
+  "verdict": "KEEP",
+  "chosen": "ttl\tepisodic\t60",
+  "scores": [
+   {
+    "size": 20062,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 22,
+    "correct": 68,
+    "heldout": {
+     "base": 212,
+     "correct": 212,
+     "veto": false,
+     "labeled": 212
+    },
+    "labeled": 69
+   },
+   {
+    "size": 43,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 4,
+    "correct": 68,
+    "heldout": {
+     "base": 212,
+     "correct": 202,
+     "veto": true,
+     "labeled": 212
+    },
+    "labeled": 69
+   }
+  ],
+  "rss_before_mb": 254.0,
+  "rss_after_mb": 249.5,
+  "size_after": 20062
+ }
+]

@@ -275,3 +275,41 @@ class EquivalenceTest(unittest.TestCase):
             finally:
                 m.close()
         self.assertEqual(out[0], out[1])
+
+
+@NEED
+class HoldoutGateTest(unittest.TestCase):
+    """AURA_MEMORY_HOLDOUT=K: a candidate that wins the evidence window only by shrinking memory, but breaks reads the
+    older windows relied on, is vetoed. Off (K=0) it is kept, which is the overfitting the held-out windows catch."""
+
+    def _run(self, k):
+        m = _with_env(AURA_MEMORY_HOLDOUT=str(k))(policy="seed", learn=True, min_evidence=1)
+        try:
+            m.obs("user.home", "oslo", "fact", "user")
+            for i in range(20):                      # old regime: episodic notes are read back ~10 events later
+                m.obs(f"ep.{i}", f"note{i}", "episodic", "user")
+                for _ in range(9): m.query("user.home", "fact")
+                m.query(f"ep.{i}", "episodic")
+            for i in range(20, 60):                  # recent regime: notes written, never read
+                m.obs(f"ep.{i}", f"note{i}", "episodic", "user")
+                m.query("user.home", "fact"); m.query("user.home", "fact")
+            m.obs("user.theme", "dark", "pref", "user")
+            m.obs("user.theme", "light", "pref", "chatter")
+            m.query("user.theme", "pref")
+            m.correct("user.theme", "light", "pref")
+            self.assertTrue(m.call("ADDCAND", "ttl", "episodic", "5", "overfit")["ok"])
+            v = m.gate()
+            return v, m.call("CHECK")["agree"]
+        finally:
+            m.close()
+
+    def test_overfit_candidate_vetoed_by_heldout(self):
+        v0, ok0 = self._run(0)
+        self.assertEqual((v0["verdict"], v0["chosen"]), ("KEEP", "ttl\tepisodic\t5\toverfit"))
+        self.assertNotIn("heldout", v0["scores"][2])
+        v1, ok1 = self._run(2)
+        self.assertEqual(v1["verdict"], "ROLLBACK")
+        ho = v1["scores"][2]["heldout"]
+        self.assertTrue(ho["veto"]); self.assertLess(ho["correct"], ho["base"])
+        self.assertEqual(v1["scores"][2]["correct"], v0["scores"][2]["correct"])   # same evidence-window score
+        self.assertTrue(ok0 and ok1)

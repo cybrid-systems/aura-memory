@@ -1,0 +1,166 @@
+[
+ {
+  "n": 2000,
+  "k": 0,
+  "gate_ms": 1295.0,
+  "verdict": "KEEP",
+  "chosen": "ttl\tepisodic\t5\toverfit",
+  "scores": [
+   {
+    "size": 2062,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 22,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 43,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 4,
+    "correct": 68,
+    "labeled": 69
+   }
+  ],
+  "rss_before_mb": 117.9,
+  "rss_after_mb": 115.0,
+  "size_after": 2062
+ },
+ {
+  "n": 2000,
+  "k": 1,
+  "gate_ms": 2087.0,
+  "verdict": "KEEP",
+  "chosen": "ttl\tepisodic\t60",
+  "scores": [
+   {
+    "size": 2062,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 22,
+    "correct": 68,
+    "heldout": {
+     "base": 86,
+     "correct": 86,
+     "veto": false,
+     "labeled": 86
+    },
+    "labeled": 69
+   },
+   {
+    "size": 43,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 4,
+    "correct": 68,
+    "heldout": {
+     "base": 86,
+     "correct": 83,
+     "veto": true,
+     "labeled": 86
+    },
+    "labeled": 69
+   }
+  ],
+  "rss_before_mb": 118.2,
+  "rss_after_mb": 118.4,
+  "size_after": 2062
+ },
+ {
+  "n": 2000,
+  "k": 2,
+  "gate_ms": 2974.3,
+  "verdict": "KEEP",
+  "chosen": "ttl\tepisodic\t60",
+  "scores": [
+   {
+    "size": 2062,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 22,
+    "correct": 68,
+    "heldout": {
+     "base": 177,
+     "correct": 177,
+     "veto": false,
+     "labeled": 177
+    },
+    "labeled": 69
+   },
+   {
+    "size": 43,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 4,
+    "correct": 68,
+    "heldout": {
+     "base": 177,
+     "correct": 170,
+     "veto": true,
+     "labeled": 177
+    },
+    "labeled": 69
+   }
+  ],
+  "rss_before_mb": 118.3,
+  "rss_after_mb": 116.0,
+  "size_after": 2062
+ },
+ {
+  "n": 2000,
+  "k": 4,
+  "gate_ms": 3972.9,
+  "verdict": "KEEP",
+  "chosen": "ttl\tepisodic\t60",
+  "scores": [
+   {
+    "size": 2062,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 22,
+    "correct": 68,
+    "heldout": {
+     "base": 212,
+     "correct": 212,
+     "veto": false,
+     "labeled": 212
+    },
+    "labeled": 69
+   },
+   {
+    "size": 43,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 4,
+    "correct": 68,
+    "heldout": {
+     "base": 212,
+     "correct": 202,
+     "veto": true,
+     "labeled": 212
+    },
+    "labeled": 69
+   }
+  ],
+  "rss_before_mb": 118.5,
+  "rss_after_mb": 119.1,
+  "size_after": 2062
+ }
+]

@@ -233,11 +233,29 @@ The gate replays the window from a checkpoint once per candidate. At 20,000 item
 * **What's left** is ~2 s per candidate at 20,000 items: the checkpoint's store walk and the trial ttl's first sweep, which are still O(store) interpreted work at about 1 µs per primitive (aura#4599) plus the heap-size allocation tax (aura#4474).
 * **aura#4625 (new, filed from here).** The first version of the one-pass split accumulated with `set!` on two captured `let` locals. On `c6a18e8a5` and `9f82bede1` that left a self-referential cons in the global provenance index, so GET lost a key's provenance and printing the key segfaulted. The split now threads an `(expired . kept)` pair through the fold, with the same replies and the same speed. `acceptance/4625` freezes the failing server with the 102-request trace that triggers it.
 
+### Held-out gate
+
+The gate used to judge a candidate only on the evidence window, which is the same window that produced the candidate. With `AURA_MEMORY_HOLDOUT=K` (default 0 = off), a candidate that beats the best score on the evidence window also gets a held-out replay over the K windows before it. It is vetoed if it answers fewer held-out queries correctly than the current policy does.
+
+* **How it works.** Checkpoints are kept far enough back to cover the extra windows: `*ck-keep*` = max(12, 2 + window·(K+1)/ck-every). Windows with no labeled query are skipped and don't count toward K. The base policy's held-out score is computed lazily, once per gate, and stored in a vector cell rather than with `set!` (aura#4625). STATS/GATE replies gain a `"heldout"` object: `{correct, base, labeled, veto, windows, ms}`.
+* **Overfit test** (`scripts/holdout_cost.py`, new test `HoldoutGateTest`). A short burst of queries that are never repeated makes `ttl episodic 5` look best on the evidence window. With K=0 the gate KEEPs it. With K≥1 it is vetoed (held-out 86 → 83 correct at K=1, 177 → 170 at K=2) and `ttl episodic 60` is kept instead.
+* **Standard bench: no change.** 5 seeds × noise {0, 0.3, 1.0} × K {0, 1, 2, 4} (`results/holdout/`) give identical results for every K: 95.9% / 95.2% / 80.0% adaptive accuracy, with the same KEEP/ROLLBACK counts. On this stream the candidates fix the post-shift regime and never change held-out answers, so the veto never fires. It is a guard, not an accuracy gain.
+* **Cost.** Each held-out pass replays its windows once for the base policy and once per winning candidate:
+
+| store | K=0 | K=1 | K=2 | K=4 |
+|---|---:|---:|---:|---:|
+| 2,000 items | 1.3 s | 2.1 s | 3.0 s | 4.0 s |
+| 20,000 items | 7.2 s | 11.9 s | 16.0 s | 20.8 s |
+
+  RSS stays at about 250 MB. In the 20k `scale_learn` runs (`results/scale/r8/`), K=2 costs almost nothing (4.37 → 4.46 s with `--old-every 0`), because only windows with labeled queries are replayed. An earlier version also replayed unlabeled windows and doubled the gate to 8.8 s.
+* **Profile and the fix** (`current-time-ms` instrumentation; there is no perf or gdb in the image). At 20k with K=0, 6.2 s of the 6.85 s gate went to 17 store sweeps. Each first sweep under a trial ttl took ~1.9 s: 0.46 s for the split, **0.94 s for the per-item category tally** (`cx-drop-many`, a `cx-pos` + `list-ref` per dropped item, ~47 µs each) and 0.43 s for `t-keep`. `store-sweep` already has the expired items per category, so `cx-drop-groups` now takes those groups and uses a native `length`. Only tracked categories walk their items (`counted?`). Results are identical: same scores, sizes and verdicts in the overfit run, and the same gates, STATS, GET probes and size rows as the stored 20k `scale_learn` run. The gate gets faster: overfit run 6.80 → **4.94 s**, `scale_learn --old-every 0` 4.37 → **3.23 s** (`results/scale/r8b/`). `AURA_MEMORY_CX_GROUPS=0` restores the old tally. The later sweeps are small (~22–25 ms each), because `t-keep` walks all 4,096 trie buckets even when the store is tiny. That is the next cut.
+* **Aura bugs found on the way** (all in `c6a18e8a5` and later, none on `e50951bff`). A micro-benchmark of the expiry tally gave wrong answers on current main. Shrinking it gave **aura#4629**: a list of 2,000 `(i "episodic")` pairs built in a tail loop ends up with 18 self-referential elements. This is probably the root of aura#4623/#4625/#4627. Also **aura#4628**: `member` compares pairs, vectors and floats by identity. aura-memory only uses `member` on strings, so it is unaffected.
+
 ## Caveats
 
 * **The stream is synthetic and designed to stress the seed policy.** Preferences drift, a new trusted source appears, and episodic volume grows. The seed is deliberately conservative (`keep-first`, user-only), which is a defensible white-box default, not a straw man, but the learner only has to find a few rule flips. The "fixed white-box" baseline is my approximation of a PilotDeck-like fixed policy, not PilotDeck itself.
 * **Retrieval is exact-key lookup.** There are no embeddings and no fuzzy matching. `src-weight` / rank is in the policy but the learner does not mutate it yet, and it only matters under `keep-both`.
-* **The gate's labels are partly implicit.** A query the user didn't correct counts as answered right. That makes the gate conservative: a candidate that fixes an uncorrected wrong answer is scored as wrong. The gate also judges a candidate on the same window that produced its evidence, so there is no held-out split yet.
+* **The gate's labels are partly implicit.** A query the user didn't correct counts as answered right. That makes the gate conservative: a candidate that fixes an uncorrected wrong answer is scored as wrong. The gate also judges a candidate on the same window that produced its evidence, unless the held-out gate (`AURA_MEMORY_HOLDOUT=K`) is on.
 * **The noise model is simple:** a mis-attributed diagnosis maps deterministically to one wrong fix. The 30% setting barely stresses the gate; the 100% setting is the real test.
 * **The policy grammar is closed:** admit/resolve/ttl/promote on 4 known categories. The learner never writes free-form code. The optional proposer hook (`aura_memory/proposer.py`, enabled by `AURA_MEMORY_LLM_URL`) can only add candidates in the same grammar, and each is still trialled by the gate. No result above uses it.
 * **The sandbox is off.** `AURA_SANDBOX=off` is still required. #4575 added a scoped Soft auto-grant (`aura soft`), but under it `mutate:rebind` is refused with `commit-not-ready` (**cybrid-systems/aura#4609**). Run only on trusted input, in a container with a memory cap; the scripts use `--memory=4g`.
@@ -254,6 +272,9 @@ The gate replays the window from a checkpoint once per candidate. At 20,000 item
 | cybrid-systems/aura#4609 (open) | under `aura soft`, `mutate:rebind` is guard-rejected (`commit-not-ready`), so the Soft auto-grant from #4575 can't be used | `AURA_SANDBOX=off` + container memory cap | – |
 | cybrid-systems/aura#4611 (open, filed from here) | regression in `c6a18e8a5` (#4599): a `filter` predicate gets the wrong element (`=` on `(car i)` sees a pair). The released server's first GATE dies with `list-ref: index out of bounds` | **pinned to `e50951bff`**, which is unaffected (`c6a18e8a5` and `9f82bede1` FAIL the check) | `acceptance/4611` (PASS on `e50951bff`) |
 | cybrid-systems/aura#4625 (open, filed from here) | regression in `c6a18e8a5`, still on `9f82bede1`: a fold whose callback `set!`s captured `let` locals leaves a self-referential cons in an unrelated global vector (provenance lost, printing segfaults) | the expiry split threads its accumulator through the fold; current tests pass on `9f82bede1` too | `acceptance/4625` (PASS on `e50951bff`) |
+| cybrid-systems/aura#4629 (open, filed from here) | regression in `c6a18e8a5`, still on `39595edd4`: building a list of pairs with a tail loop leaves 18 of 2,000 elements self-referential. This is the store/index/replay build shape, and probably the root of #4623/#4625/#4627 | **pinned to `e50951bff`** | `acceptance/4629` (PASS on `e50951bff`, FAIL on `39595edd4`) |
+| cybrid-systems/aura#4627 (open, filed from aura-harness) | regression in `c6a18e8a5`: `(equal? (list 1 2) x)` is `#f` on every 66th loop iteration (vectors: every 131st) | pinned; the server compares strings and numbers, which are unaffected | – |
+| cybrid-systems/aura#4628 (open, filed from here) | `member` compares pairs, vectors and floats with `eq?`, although it is documented as `equal?` | `member` is only used on strings | – |
 | cybrid-systems/aura#4612 (open, filed from here) | `hash-ref` scans every slot, so a miss is O(table size) | the store index doesn't use `(hash)`; the key hash is computed, not memoised | – |
 | cybrid-systems/aura#4613 (open, filed from here) | `vector->list` / `list->vector` / `(hash)` garbage is never reclaimed | trie nodes are lists, not vectors | – |
 | cybrid-systems/aura#4474 (reopened from here) | the reclaimer re-marks the whole live heap every ≤32,768 allocations, so allocation cost grows with the live heap above ~1M objects | the store index, bulk expiry and decay logging are allocation-light (see Learning at scale and the gate early stop section); still present on `9f82bede1` | – |
@@ -271,8 +292,9 @@ aura/policy_append.aura   append-only baseline policy
 aura/closed_loop_bench.aura  in-process latency micro-benchmark
 scripts/scale.py          store-size scaling (N facts + queries, optional steady phase)
 scripts/scale_learn.py    learning at scale (big store + size check + gate + forgetting)
+scripts/holdout_cost.py   held-out gate: overfit candidate vs K, gate time and RSS at N items
 aura_memory/              host: stream.py, control.py, agent.py, bench.py, acceptance.py, proposer.py, __main__.py
-acceptance/               Aura issue repros + memory-cycle (4611 / 4625: frozen server + request trace on stdin)
+acceptance/               Aura issue repros + memory-cycle (4611 / 4625: frozen server + request trace on stdin; 4629: 3-line list build)
 results/                  committed bench / noise / latency / acceptance outputs + one example version log
 tests/                    unit tests (stream invariants; white-box ops, provenance, KEEP/ROLLBACK against a real Aura)
 ```
@@ -280,9 +302,10 @@ tests/                    unit tests (stream invariants; white-box ops, provenan
 ## Next steps
 
 * The gate now stops losing candidates early and allocates little, but a trial still costs ~2 s per candidate at 20,000 items (the checkpoint's store walk plus the trial ttl's first sweep). Next: gate on a sampled window store, so a trial doesn't touch every item. Allocation cost rising with heap size (aura#4474) and interpreter overhead (aura#4599) are the Aura-side floors.
-* Move to a newer Aura main once aura#4611 and aura#4625 are fixed. `9f82bede1` (checked this round) roughly halves loop overhead, and the current server's tests pass on it, but the released server's GATE still fails (#4611) and the heap corruption in #4625 is still there.
+* Move to a newer Aura main once aura#4629 (list corruption), #4611, #4625 and #4627 are fixed. On `39595edd4` (latest checked) `acceptance/4611`, `4625` and `4629` still FAIL (`results/acceptance-39595edd4.txt`).
+* Make small-store sweeps per-item instead of walking all 4,096 trie buckets (~25 ms per sweep after the first one).
 * Switch from `AURA_SANDBOX=off` to `aura soft` once aura#4609 is fixed.
-* Use a held-out replay split and sample older windows, so the gate stops judging on the evidence window.
+* Make the held-out gate cheaper by replaying all candidates in one pass over the held-out windows, then consider turning it on by default. Find a stream where held-out answers actually change (a regime that comes back).
 * Let the learner mutate `src-weight` / ranking, and add fuzzy (embedding) retrieval to the data plane.
 * Run more seeds, sweep the noise from 0.3 to 1.0, and try a real conversation log instead of the synthetic stream.
 

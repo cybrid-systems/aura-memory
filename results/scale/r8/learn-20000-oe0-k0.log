@@ -1,0 +1,8 @@
+  GATE {"event": 50, "ms": 4366.8, "verdict": "KEEP", "chosen": "ttl\tepisodic\t60", "scores": [{"size": 20018, "correct": 5, "labeled": 5}, {"size": 38, "correct": 5, "labeled": 5}, {"size": 98, "correct": 5, "labeled": 5}], "size_before": 20018}
+{"event": 100, "size": 19, "ev_ms_p50": 1.51, "ev_ms_p99": 3985.9, "ev_ms_max": 3985.9, "rss_mb": 329.1, "wall_s": 10.0}
+{"event": 200, "size": 20, "ev_ms_p50": 1.52, "ev_ms_p99": 3.91, "ev_ms_max": 3.91, "rss_mb": 329.2, "wall_s": 10.2}
+{"event": 300, "size": 20, "ev_ms_p50": 1.52, "ev_ms_p99": 3.65, "ev_ms_max": 3.65, "rss_mb": 329.2, "wall_s": 10.4}
+{"event": 400, "size": 20, "ev_ms_p50": 1.58, "ev_ms_p99": 67.62, "ev_ms_max": 67.62, "rss_mb": 329.3, "wall_s": 10.6}
+{"event": 500, "size": 20, "ev_ms_p50": 1.5, "ev_ms_p99": 3.77, "ev_ms_max": 3.77, "rss_mb": 329.4, "wall_s": 10.8}
+{"event": 600, "size": 20, "ev_ms_p50": 1.57, "ev_ms_p99": 66.2, "ev_ms_max": 66.2, "rss_mb": 329.5, "wall_s": 11.1}
+ops ms {'STATS': 5.2, 'LIST': 44.4, 'LIST_cat': 42.2, 'GET': 1.7}

@@ -1,0 +1,8 @@
+  GATE {"event": 50, "ms": 4191.3, "verdict": "ROLLBACK", "chosen": false, "scores": [{"size": 20016, "correct": 12, "labeled": 12}, {"size": -1, "correct": 0, "pruned": true, "labeled": 1, "replayed": 67}, {"size": -1, "correct": 0, "pruned": true, "labeled": 1, "replayed": 67}], "size_before": 20016}
+{"event": 100, "size": 20019, "ev_ms_p50": 1.51, "ev_ms_p99": 1317.71, "ev_ms_max": 1317.71, "rss_mb": 257.6, "wall_s": 5.7}
+{"event": 200, "size": 20020, "ev_ms_p50": 1.59, "ev_ms_p99": 3.77, "ev_ms_max": 3.77, "rss_mb": 257.6, "wall_s": 5.9}
+{"event": 300, "size": 20020, "ev_ms_p50": 1.56, "ev_ms_p99": 59.48, "ev_ms_max": 59.48, "rss_mb": 280.8, "wall_s": 6.1}
+{"event": 400, "size": 20020, "ev_ms_p50": 1.56, "ev_ms_p99": 3.53, "ev_ms_max": 3.53, "rss_mb": 280.8, "wall_s": 6.3}
+{"event": 500, "size": 20020, "ev_ms_p50": 1.56, "ev_ms_p99": 61.29, "ev_ms_max": 61.29, "rss_mb": 281.0, "wall_s": 6.5}
+{"event": 600, "size": 20020, "ev_ms_p50": 1.58, "ev_ms_p99": 3.45, "ev_ms_max": 3.45, "rss_mb": 281.0, "wall_s": 6.7}
+ops ms {'STATS': 3.5, 'LIST': 1969.2, 'LIST_cat': 279.2, 'GET': 1.4}
