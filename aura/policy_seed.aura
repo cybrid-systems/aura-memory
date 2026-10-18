@@ -1,8 +1,9 @@
 ;; aura-memory seed memory-management policy (version 0), loaded with set-code + eval-current.
 ;; This is the "fixed white-box" policy: conservative, readable rules. The learner in server.aura rewrites
 ;; these defines with mutate:rebind (compiled from its rule tables) and undoes them with ast:restore.
-;; WORKAROUND cybrid-systems/aura#4583 / #4584: no self-recursive defines and no filter/map in the workspace;
-;; every define here is a flat cond so rebinding stays cheap and dispatch stays correct.
+;; Every define here is a flat cond because the learner compiles it from rule tables. (This used to be a
+;; workaround for cybrid-systems/aura#4583 / #4584; both are fixed upstream, so recursion and filter/map in the
+;; workspace are safe again.)
 
 ;; admit: should an offered write (category, source) enter memory at all?
 (define admit

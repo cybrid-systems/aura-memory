@@ -1,12 +1,12 @@
-== acceptance on /workspace/aura-memory-bin/aura
+== acceptance on /workspace/aura-main-bin/aura
 PASS  memory-cycle  aura-memory: snapshot, rebind 2 policy defines, restore -> byte-identical source; rebind + keep
       got: (cycle #t #t #t)
-FAIL  4583          10 rebinds next to a self-recursive define stay flat (no 4x-per-rebind blow-up)
-      got: (bounded #f)
-FAIL  4584          2nd call of a workspace define whose sibling uses filter runs the right define
-      got: (call2 (8 8))
-FAIL  4585          a host-program loop is not >3x slower after one set-code
-      got: (ratio<3 #f)
-FAIL  4586          an error inside a map callback reaches try
-      got: (<unknown>)
+PASS  4583          10 rebinds next to a self-recursive define stay flat (no 4x-per-rebind blow-up)
+      got: (bounded #t)
+PASS  4584          2nd call of a workspace define whose sibling uses filter runs the right define
+      got: (call2 (8 (a)))
+PASS  4585          a host-program loop is not >3x slower after one set-code
+      got: (ratio<3 #t)
+PASS  4586          an error inside a map callback reaches try
+      got: caught
 

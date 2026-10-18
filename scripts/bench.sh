@@ -8,7 +8,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 : "${AURA_BIN:?set AURA_BIN to an Aura build-rel/aura}"
 run() { if [ "${DOCKER_MODE:-0}" = 1 ]; then scripts/in-docker.sh "$*"; else bash -c "$*"; fi; }
 if [ "${1:-}" = "--docker" ]; then DOCKER_MODE=1; shift; fi
-export AURA_SANDBOX=off AURA_PIPELINE_STRICT=0   # set-code / mutate:rebind from a program still need off: cybrid-systems/aura#4575
+export AURA_SANDBOX=off AURA_PIPELINE_STRICT=0   # aura soft refuses mutate:rebind: cybrid-systems/aura#4609
 echo "== acceptance on $AURA_BIN"
 run "python3 -m aura_memory acceptance" || true
 echo; echo "== in-process latency"

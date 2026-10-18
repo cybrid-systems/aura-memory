@@ -20,7 +20,7 @@ latency (host round trip over pipes)
 
 | mode | query µs p50 / p99 | write µs p50 | policy mutation ms p50 / max (GATE or APPLY) | startup ms | wall s |
 |---|---|---|---|---|---|
-| append | 57394 / 403575 | 31564 | – | 114 | 40 |
-| fixed | 23934 / 180844 | 14024 | – | 118 | 17 |
-| adaptive | 19696 / 79514 | 10502 | 3695 / 5889 | 113 | 24 |
-| adaptive-nogate | 19627 / 79318 | 11195 | 12 / 17 | 116 | 12 |
+| append | 1871 / 9508 | 1156 | – | 65 | 1 |
+| fixed | 1192 / 4238 | 713 | – | 63 | 1 |
+| adaptive | 994 / 2323 | 657 | 120 / 160 | 53 | 1 |
+| adaptive-nogate | 994 / 2820 | 665 | 2 / 4 | 54 | 1 |

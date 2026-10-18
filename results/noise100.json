@@ -28,13 +28,13 @@
   "kept": [
    "ttl\tepisodic\t60"
   ],
-  "query_us_p50": 19666.994994622655,
-  "query_us_p99": 77344.67698901426,
-  "write_us_p50": 9987.331999582238,
-  "mutation_ms_p50": 2489.6581459906884,
-  "mutation_ms_max": 5223.0924049945315,
-  "startup_ms": 122.3237879894441,
-  "wall_s": 36.81489503200282
+  "query_us_p50": 1027.059000080044,
+  "query_us_p99": 3118.5150000965223,
+  "write_us_p50": 640.3999996109633,
+  "mutation_ms_p50": 71.71510300031514,
+  "mutation_ms_max": 157.41148999950383,
+  "startup_ms": 48.11015000086627,
+  "wall_s": 1.3823255319994132
  },
  {
   "mode": "adaptive-nogate",
@@ -76,13 +76,13 @@
    "admit\tepisodic\tuser\t1",
    "admit\tepisodic\tuser\t0"
   ],
-  "query_us_p50": 18751.196999801323,
-  "query_us_p99": 71039.13500031922,
-  "write_us_p50": 9655.990012106486,
-  "mutation_ms_p50": 16.033514999435283,
-  "mutation_ms_max": 18.2978499942692,
-  "startup_ms": 120.53317100799177,
-  "wall_s": 11.830598483007634
+  "query_us_p50": 984.7920000538579,
+  "query_us_p99": 2275.1619999326067,
+  "write_us_p50": 620.2089998623705,
+  "mutation_ms_p50": 2.8368559997034026,
+  "mutation_ms_max": 3.668502999971679,
+  "startup_ms": 48.70262199983699,
+  "wall_s": 0.6699658389998149
  },
  {
   "mode": "adaptive",
@@ -113,13 +113,13 @@
   "kept": [
    "ttl\tepisodic\t60"
   ],
-  "query_us_p50": 19137.213996145874,
-  "query_us_p99": 80455.97899763379,
-  "write_us_p50": 9668.809012509882,
-  "mutation_ms_p50": 2703.4412770008203,
-  "mutation_ms_max": 5231.958132993896,
-  "startup_ms": 119.84938599925954,
-  "wall_s": 33.571843815996544
+  "query_us_p50": 974.1470003064023,
+  "query_us_p99": 2349.8339996876894,
+  "write_us_p50": 613.1280006229645,
+  "mutation_ms_p50": 70.95087899961072,
+  "mutation_ms_max": 144.9853370004348,
+  "startup_ms": 48.89543499939464,
+  "wall_s": 1.2271880400003283
  },
  {
   "mode": "adaptive-nogate",
@@ -161,13 +161,13 @@
    "admit\tepisodic\tuser\t1",
    "admit\tepisodic\tuser\t0"
   ],
-  "query_us_p50": 16648.652992444113,
-  "query_us_p99": 66539.99899572227,
-  "write_us_p50": 8845.757998642512,
-  "mutation_ms_p50": 16.05807499436196,
-  "mutation_ms_max": 18.729240997345187,
-  "startup_ms": 104.81265500129666,
-  "wall_s": 10.243148941997788
+  "query_us_p50": 916.6140007437207,
+  "query_us_p99": 1896.923000458628,
+  "write_us_p50": 579.1919993498595,
+  "mutation_ms_p50": 2.7122150004288414,
+  "mutation_ms_max": 3.2579630005784566,
+  "startup_ms": 50.28264799966564,
+  "wall_s": 0.5955674229999204
  },
  {
   "mode": "adaptive",
@@ -198,13 +198,13 @@
   "kept": [
    "ttl\tepisodic\t60"
   ],
-  "query_us_p50": 19994.78999641724,
-  "query_us_p99": 74646.54500654433,
-  "write_us_p50": 9752.34099314548,
-  "mutation_ms_p50": 2490.160226006992,
-  "mutation_ms_max": 5710.328528002719,
-  "startup_ms": 104.8345809977036,
-  "wall_s": 32.982118108993745
+  "query_us_p50": 1007.1709994008415,
+  "query_us_p99": 2560.584000093513,
+  "write_us_p50": 579.3200007246924,
+  "mutation_ms_p50": 70.29167600012443,
+  "mutation_ms_max": 145.87937699980102,
+  "startup_ms": 48.65822499959904,
+  "wall_s": 1.22719817000052
  },
  {
   "mode": "adaptive-nogate",
@@ -245,13 +245,13 @@
    "resolve\tepisodic\tkeep-first",
    "admit\tepisodic\tuser\t0"
   ],
-  "query_us_p50": 18764.56500031054,
-  "query_us_p99": 65035.447012633085,
-  "write_us_p50": 9642.506993259303,
-  "mutation_ms_p50": 13.965453996206634,
-  "mutation_ms_max": 16.30020499578677,
-  "startup_ms": 109.96497899759561,
-  "wall_s": 11.733211682003457
+  "query_us_p50": 981.672999841976,
+  "query_us_p99": 2414.2090005625505,
+  "write_us_p50": 601.0630004311679,
+  "mutation_ms_p50": 2.1383140001489664,
+  "mutation_ms_max": 3.4216739995827083,
+  "startup_ms": 69.0589589994488,
+  "wall_s": 0.6562899679993279
  },
  {
   "mode": "adaptive",
@@ -282,13 +282,13 @@
   "kept": [
    "ttl\tepisodic\t60"
   ],
-  "query_us_p50": 19884.199995431118,
-  "query_us_p99": 78772.8379946202,
-  "write_us_p50": 9891.83499768842,
-  "mutation_ms_p50": 2953.07911800046,
-  "mutation_ms_max": 4272.05548400525,
-  "startup_ms": 118.7450470024487,
-  "wall_s": 36.24626701899979
+  "query_us_p50": 976.7249994183658,
+  "query_us_p99": 2635.494999594812,
+  "write_us_p50": 596.6159997115028,
+  "mutation_ms_p50": 79.25186400007078,
+  "mutation_ms_max": 126.63687599979312,
+  "startup_ms": 81.5007669998522,
+  "wall_s": 1.2989612960000159
  },
  {
   "mode": "adaptive-nogate",
@@ -330,13 +330,13 @@
    "admit\tepisodic\tuser\t1",
    "admit\tepisodic\tuser\t0"
   ],
-  "query_us_p50": 19718.32300478127,
-  "query_us_p99": 75746.33699550759,
-  "write_us_p50": 9919.706993969157,
-  "mutation_ms_p50": 16.26628301164601,
-  "mutation_ms_max": 18.334667998715304,
-  "startup_ms": 109.367986995494,
-  "wall_s": 11.905900622004992
+  "query_us_p50": 987.6390004137647,
+  "query_us_p99": 2624.1530003972002,
+  "write_us_p50": 571.8200000046636,
+  "mutation_ms_p50": 2.598842000224977,
+  "mutation_ms_max": 3.037354999833042,
+  "startup_ms": 46.98361000009754,
+  "wall_s": 0.6182434309994278
  },
  {
   "mode": "adaptive",
@@ -367,13 +367,13 @@
   "kept": [
    "ttl\tepisodic\t60"
   ],
-  "query_us_p50": 19815.399005892687,
-  "query_us_p99": 60907.36800979357,
-  "write_us_p50": 10082.289009005763,
-  "mutation_ms_p50": 2985.326655994868,
-  "mutation_ms_max": 4537.015623005573,
-  "startup_ms": 117.83227900741622,
-  "wall_s": 35.76117035099014
+  "query_us_p50": 940.1150000485359,
+  "query_us_p99": 1882.6280002031126,
+  "write_us_p50": 608.0419998397701,
+  "mutation_ms_p50": 85.46007899985852,
+  "mutation_ms_max": 121.90310699952533,
+  "startup_ms": 47.987990000365244,
+  "wall_s": 1.3124304729999494
  },
  {
   "mode": "adaptive-nogate",
@@ -416,12 +416,12 @@
    "admit\tpref\tchatter\t0",
    "resolve\tepisodic\tkeep-first"
   ],
-  "query_us_p50": 19379.924997338094,
-  "query_us_p99": 61414.051000610925,
-  "write_us_p50": 9960.9789904207,
-  "mutation_ms_p50": 13.812464007060044,
-  "mutation_ms_max": 20.54524999402929,
-  "startup_ms": 116.44328699912876,
-  "wall_s": 12.112423533006222
+  "query_us_p50": 969.9859992906568,
+  "query_us_p99": 2346.952999687346,
+  "write_us_p50": 601.6440001985757,
+  "mutation_ms_p50": 2.213816999756091,
+  "mutation_ms_max": 3.3789540002544527,
+  "startup_ms": 41.769343999476405,
+  "wall_s": 0.6420633809993888
  }
 ]

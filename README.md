@@ -62,7 +62,7 @@ flowchart LR
 ## Run it
 
 ```bash
-export AURA_BIN=~/aura/build-rel/aura      # Aura build-rel binary (tested: main c8ad457c9)
+export AURA_BIN=~/aura/build-rel/aura      # Aura build-rel binary (tested: main e50951bff; first published on c8ad457c9)
 scripts/test.sh --docker                   # unit tests (control-plane tests need AURA_BIN)
 scripts/bench.sh --docker                  # acceptance + in-process latency + 4-mode bench, prints tables
 scripts/bench.sh --docker --noise 1.0 --modes adaptive adaptive-nogate   # noise ablation
@@ -82,7 +82,7 @@ scripts/in-docker.sh 'python3 -m aura_memory run --mode adaptive --seed 3' # eve
 
 ## Results
 
-These are 5 seeds (0–4) of 600 events each, from `results/bench.md`. Accuracy is the share of queries answered with the current truth. A stale answer is a value that used to be true.
+These are 5 seeds (0–4) of 600 events each, from `results/bench.md`, on Aura main `e50951bff` (re-pinned 2026-10-18). Accuracy and every learner decision are identical to the first run on `c8ad457c9`; only latency changed. Accuracy is the share of queries answered with the current truth. A stale answer is a value that used to be true.
 
 | mode | accuracy (mean, min–max) | window 1 / 2 / 3 | stale-answer rate | user corrections | memory size (final / mean) | proposals | KEEP / ROLLBACK |
 |---|---|---|---|---|---|---|---|
@@ -125,29 +125,31 @@ With every diagnosis wrong, the gate rejected every harmful candidate. It kept o
 
 ### Latency
 
-Measured while the bench ran 3 streams in parallel on a shared box, so absolute numbers are inflated. See [`results/latency.txt`](results/latency.txt).
+Measured while the bench ran 3 streams in parallel on a shared box, so absolute numbers are inflated. See [`results/latency.txt`](results/latency.txt). Right column: the first run on `c8ad457c9`.
 
 **In-process**, inside one Aura process:
 
-| step | µs |
-|---|---|
-| workspace policy call | 79 |
-| `mutate:rebind` + `eval-current` | 2,950 |
-| `ast:snapshot` | 4,180 |
-| `ast:restore` + `eval-current` | 6,470 |
-| trial cycle (snapshot → rebind → eval → call → restore → eval) | 14,620 |
+| step | µs (`e50951bff`) | was |
+|---|---|---|
+| workspace policy call | 5.8 | 79 |
+| `mutate:rebind` + `eval-current` | 570 | 2,950 |
+| `ast:snapshot` | 240 | 4,180 |
+| `ast:restore` + `eval-current` | 430 | 6,470 |
+| trial cycle (snapshot → rebind → eval → call → restore → eval) | 1,690 | 14,620 |
 
 **Host round trip over pipes:**
 
-| mode | query p50 / p99 | write p50 | policy mutation p50 / max |
-|---|---|---|---|
-| append-only | 56 ms / 408 ms | 32 ms | – |
-| fixed | 24 ms / 176 ms | 14 ms | – |
-| adaptive | 20 ms / 80 ms | 10 ms | GATE 3.6 s / 5.7 s |
-| adaptive, no gate | 20 ms / 78 ms | 11 ms | APPLY 13 ms / 16 ms |
+| mode | query p50 / p99 | write p50 | policy mutation p50 / max | query p50 was |
+|---|---|---|---|---|
+| append-only | 1.9 ms / 9.6 ms | 1.1 ms | – | 56 ms |
+| fixed | 1.1 ms / 4.0 ms | 0.7 ms | – | 24 ms |
+| adaptive | 1.0 ms / 2.5 ms | 0.6 ms | GATE 108 ms / 165 ms (was 3.6 s / 5.7 s) | 20 ms |
+| adaptive, no gate | 1.0 ms / 2.9 ms | 0.7 ms | APPLY 2 ms / 6 ms (was 13 / 16 ms) | 20 ms |
 
-* **Why queries are slow:** a query is tens of milliseconds because the store scan, ranking and provenance run in the Aura host program, and **aura#4585** makes every host-program call much slower after the first `set-code`. With the same fixed policy written as plain program defines (no `set-code`, so no learning possible), a query takes **3.7 ms p50** instead of 23 ms on the same stream. The append-only store is larger and its periodic sweeps are O(n), hence its p99.
-* **Why a gate takes seconds:** it costs 2.7–5.9 s. Rebinding and restoring the policy is only about 15 ms of that per candidate. The rest is replaying about 100 events per worldline (1 base + 1–2 candidates) in the interpreted host program, which aura#4585 also slows down. Gates are rare (about 3–8 per 600 events), but this is the number to fix before using it interactively.
+A 600-event stream now takes about 1 s of wall time per mode (was 12–39 s).
+
+* **Queries got ~20× faster** because aura#4585 is fixed: host-program calls no longer slow down after the first `set-code`. The ablation (same fixed policy as plain program defines, no `set-code`) now differs by only ~20%: 1.27 ms vs 1.05 ms p50 per query, where it was 23 ms vs 3.7 ms. The store scan, ranking and provenance still run in the interpreted host program; the append-only store is larger and its periodic sweeps are O(n), hence its p99.
+* **A gate now costs about 0.1 s** (it was 2.7–5.9 s). It still replays about 100 events per worldline (1 base + 1–2 candidates) in the host program; rebinding and restoring the policy is about 1 ms of that per candidate. Gates are rare (about 3–8 per 600 events), so this is fine for interactive use.
 
 ## Caveats
 
@@ -156,18 +158,18 @@ Measured while the bench ran 3 streams in parallel on a shared box, so absolute 
 * **The gate's labels are partly implicit.** A query the user didn't correct counts as answered right. That makes the gate conservative: a candidate that fixes an uncorrected wrong answer is scored as wrong. The gate also judges a candidate on the same window that produced its evidence, so there is no held-out split yet.
 * **The noise model is simple:** a mis-attributed diagnosis maps deterministically to one wrong fix. The 30% setting barely stresses the gate; the 100% setting is the real test.
 * **The policy grammar is closed:** admit/resolve/ttl/promote on 4 known categories. The learner never writes free-form code. The optional proposer hook (`aura_memory/proposer.py`, enabled by `AURA_MEMORY_LLM_URL`) can only add candidates in the same grammar, and each is still trialled by the gate. No result above uses it.
-* **The sandbox is off.** `AURA_SANDBOX=off` is required because the Soft level still blocks `set-code` / `mutate:rebind` from a local program (**cybrid-systems/aura#4575**). Run only on trusted input, in a container with a memory cap; the scripts use `--memory=4g`.
+* **The sandbox is off.** `AURA_SANDBOX=off` is still required. #4575 added a scoped Soft auto-grant (`aura soft`), but under it `mutate:rebind` is refused with `commit-not-ready` (**cybrid-systems/aura#4609**). Run only on trusted input, in a container with a memory cap; the scripts use `--memory=4g`.
 * **Only 5 seeds.** The adaptive-vs-baselines gap holds on every seed. The gated-vs-ungated gap is small, except in the noise ablation.
 
 ## Known Aura issues
 
-| issue | effect here | workaround | check |
+| issue | effect here | status on `e50951bff` | check |
 |---|---|---|---|
-| cybrid-systems/aura#4583 | repeated `mutate:rebind` blows up next to a self-recursive workspace define | the workspace policy is flat `cond`s, no recursion | `acceptance/4583` (FAIL on c8ad457c9) |
-| cybrid-systems/aura#4584 | a sibling that passes a procedure to `filter`/`map` makes a workspace call dispatch to the wrong define | no `filter`/`map` in the workspace policy; all list work is in server.aura | `acceptance/4584` (FAIL) |
-| cybrid-systems/aura#4585 | host-program calls are much slower after one `set-code` | none: query p50 23 ms vs 3.7 ms without `set-code` | `acceptance/4585` (FAIL), `results/latency.txt` |
-| cybrid-systems/aura#4586 (new, filed from here) | an error raised inside a `map`/`filter` callback is swallowed: `try` can't catch it, `map` returns `<unknown>`, `filter` keeps the element | none at the language level. This hid a gate bug: candidates silently ran with the old policy | `acceptance/4586` (FAIL) |
-| cybrid-systems/aura#4575 | Soft sandbox blocks the workspace primitives this needs | `AURA_SANDBOX=off` + container memory cap | – |
+| cybrid-systems/aura#4583 | repeated `mutate:rebind` blows up next to a self-recursive workspace define | fixed upstream. The policy stays flat `cond`s because the learner compiles it from rule tables, not because of the bug | `acceptance/4583` (PASS) |
+| cybrid-systems/aura#4584 | a sibling that passes a procedure to `filter`/`map` makes a workspace call dispatch to the wrong define | fixed upstream; `filter`/`map` in the workspace is safe again | `acceptance/4584` (PASS) |
+| cybrid-systems/aura#4585 | host-program calls are much slower after one `set-code` | fixed upstream: query p50 23 ms → 1.1 ms | `acceptance/4585` (PASS), `results/latency.txt` |
+| cybrid-systems/aura#4586 (filed from here) | an error raised inside a `map`/`filter` callback is swallowed: `try` can't catch it, `map` returns `<unknown>`, `filter` keeps the element | fixed upstream. It had hidden a gate bug: candidates silently ran with the old policy | `acceptance/4586` (PASS) |
+| cybrid-systems/aura#4609 (open) | under `aura soft`, `mutate:rebind` is guard-rejected (`commit-not-ready`), so the Soft auto-grant from #4575 can't be used | `AURA_SANDBOX=off` + container memory cap | – |
 
 `python3 -m aura_memory acceptance` prints PASS/FAIL for each item against `$AURA_BIN`. `memory-cycle` is aura-memory's own snapshot → rebind → restore → byte-identical round trip, and must PASS.
 
@@ -186,7 +188,8 @@ tests/                    unit tests (stream invariants; white-box ops, provenan
 
 ## Next steps
 
-* Move the store scan, replay and ranking out of the slow host-program path. Either wait for aura#4585 or move them to a native data plane, keeping only policy decisions in Aura. Then measure the gate again.
+* With aura#4585 fixed, a query costs ~1 ms and a gate ~0.1 s. The next cost is the O(n) store scan in the host program: index items by key, or move the scan to a native data plane.
+* Switch from `AURA_SANDBOX=off` to `aura soft` once aura#4609 is fixed.
 * Use a held-out replay split and sample older windows, so the gate stops judging on the evidence window.
 * Let the learner mutate `src-weight` / ranking, and add fuzzy (embedding) retrieval to the data plane.
 * Run more seeds, sweep the noise from 0.3 to 1.0, and try a real conversation log instead of the synthetic stream.
