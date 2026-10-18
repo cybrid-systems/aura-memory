@@ -1,0 +1,66 @@
+{
+ "n": 20000,
+ "rows": [
+  {
+   "items": 4000,
+   "write_ms_p50": 0.576,
+   "query_ms_p50": 0.866,
+   "rss_mb": 141.1,
+   "wall_s": 7.6,
+   "events": 8000,
+   "provenance": 8000
+  },
+  {
+   "items": 8000,
+   "write_ms_p50": 0.632,
+   "query_ms_p50": 0.944,
+   "rss_mb": 199.5,
+   "wall_s": 16.6,
+   "events": 16000,
+   "provenance": 16000
+  },
+  {
+   "items": 12000,
+   "write_ms_p50": 0.671,
+   "query_ms_p50": 1.019,
+   "rss_mb": 231.9,
+   "wall_s": 27.0,
+   "events": 24000,
+   "provenance": 24000
+  },
+  {
+   "items": 16000,
+   "write_ms_p50": 0.662,
+   "query_ms_p50": 0.995,
+   "rss_mb": 285.1,
+   "wall_s": 37.3,
+   "events": 32000,
+   "provenance": 32000
+  },
+  {
+   "items": 20000,
+   "write_ms_p50": 0.697,
+   "query_ms_p50": 1.03,
+   "rss_mb": 336.6,
+   "wall_s": 48.4,
+   "events": 40000,
+   "provenance": 40000
+  }
+ ],
+ "steady": [
+  {
+   "steady_queries": 4000,
+   "items": 20000,
+   "query_ms_p50": 1.068,
+   "rss_mb": 342.5,
+   "wall_s": 54.5
+  },
+  {
+   "steady_queries": 8000,
+   "items": 20000,
+   "query_ms_p50": 1.072,
+   "rss_mb": 348.6,
+   "wall_s": 60.9
+  }
+ ]
+}

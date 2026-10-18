@@ -27,6 +27,37 @@ class WhiteBoxTest(unittest.TestCase):
         self.assertEqual([p["op"] for p in g["provenance"]], ["rejected", "added"])
         self.assertEqual(m.query("user.theme", "pref")["answer"], "dark")
 
+    def test_store_index_matches_model(self):
+        # 600 keys over 4096 buckets (many sharing a bucket), keep-first conflicts, a delete, a pin; LIST must stay
+        # newest-first and GET/STATS must agree with a plain Python model of the old list store.
+        m = self.m
+        m.call("LEARN", "0")
+        model = {}
+        for i in range(600):
+            k = f"user.k{i % 400}"          # keys 0..199 written twice: second write is lost to keep-first
+            r = m.obs(k, f"v{i}", "fact", "user")
+            if k in model:
+                self.assertEqual(r["outcome"], "lost-conflict")
+            else:
+                self.assertEqual(r["outcome"], "added")
+                model[k] = (r["id"], f"v{i}")
+        for k in ("user.k0", "user.k199", "user.k200", "user.k399"):
+            self.assertEqual(m.query(k, "fact")["answer"], model[k][1])
+        self.assertEqual(m.query("user.missing", "fact")["answer"], "")
+        gone = model.pop("user.k7")
+        self.assertTrue(m.delete(gone[0])["ok"])
+        self.assertEqual(m.get("user.k7")["items"], [])
+        items = m.list()
+        self.assertEqual([i["id"] for i in items], sorted((v[0] for v in model.values()), reverse=True))
+        self.assertEqual({i["key"]: i["val"] for i in items}, {k: v[1] for k, v in model.items()})
+        st = m.stats()
+        self.assertEqual(st["size"], len(model))
+        self.assertEqual(dict(st["by_cat"])["fact"], len(model))
+        self.assertTrue(m.pin(model["user.k8"][0])["item"]["pinned"])
+        self.assertTrue(m.get("user.k8")["items"][0]["pinned"])
+        self.assertEqual(m.obs("user.k8", "other", "fact", "user")["outcome"], "lost-conflict")
+        self.assertEqual(m.query("user.k8", "fact")["answer"], model["user.k8"][1])
+
     def test_edit_pin_delete_are_recorded(self):
         m = self.m
         iid = m.obs("user.pet", "cat:Mochi", "fact", "user")["id"]

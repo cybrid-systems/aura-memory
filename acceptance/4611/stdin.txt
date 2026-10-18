@@ -1,0 +1,18 @@
+EV	OBS	user.theme	high-contrast	pref	chatter	0
+EV	OBS	user.editor	emacs	pref	user	0
+EV	OBS	other.4.coffee	tired	episodic	chatter	0
+EV	OBS	user.meeting	never-friday	pref	assistant	0
+EV	OBS	user.birthday	05-20	fact	user	0
+EV	OBS	user.lang	python	pref	assistant	0
+EV	QUERY	user.theme		pref		0
+EV	OBS	ep.6.lunch	bank	episodic	user	0
+EV	OBS	user.lang	rust	pref	assistant	0
+EV	QUERY	user.coffee		pref		0
+EV	CORRECT	user.lang	python	pref	correction	0
+EV	OBS	user.hometown	Kunming	fact	user	0
+EV	QUERY	user.theme		pref		0
+EV	OBS	other.8.city	tired	episodic	chatter	0
+EV	OBS	ep.7.mood	focused	episodic	user	0
+EV	QUERY	user.meeting		pref		0
+EV	CORRECT	user.meeting	never-friday	pref	correction	0
+GATE
