@@ -42,3 +42,23 @@ class StreamTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RecallRegimeTest(unittest.TestCase):
+    def test_off_by_default(self):
+        a, b = stream(3, 600), stream(3, 600, recall=0)
+        self.assertEqual([vars(e) for e in a], [vars(e) for e in b])
+
+    def test_recall_queries_are_old_episodic_notes(self):
+        from aura_memory.stream import RECALL_AGE, in_recall
+        evs = stream(0, 1200, recall=100)
+        first = {}
+        for e in evs:
+            if e.kind == "OBS" and e.cat == "episodic" and e.src == "user":
+                first.setdefault(e.key, e.ts)
+        old = [e for e in evs if e.kind == "QUERY" and e.cat == "episodic" and in_recall(e.ts, 100)]
+        self.assertGreater(len(old), 30)
+        for e in old:
+            self.assertTrue(RECALL_AGE[0] <= e.ts - first[e.key] <= RECALL_AGE[1], (e.key, e.ts, first[e.key]))
+        recent = [e for e in evs if e.kind == "QUERY" and e.cat == "episodic" and not in_recall(e.ts, 100)]
+        self.assertTrue(all(e.ts - first[e.key] <= 15 for e in recent))

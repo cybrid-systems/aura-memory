@@ -1,0 +1,103 @@
+EV	OBS	user.lang	zig	pref	user	0
+EV	OBS	user.meeting	noon	pref	user	0
+EV	OBS	user.birthday	05-20	fact	user	0
+EV	OBS	user.employer	Orbital	fact	user	0
+EV	OBS	user.theme	solarized	pref	user	0
+EV	OBS	user.allergy	shellfish	fact	user	0
+EV	OBS	user.coffee	espresso	pref	user	0
+EV	OBS	user.pet	none	fact	user	0
+EV	OBS	user.hometown	Kunming	fact	user	0
+EV	OBS	user.music	techno	pref	user	0
+EV	OBS	user.editor	emacs	pref	user	0
+EV	OBS	ep.1.mood	sunny	episodic	user	0
+EV	OBS	user.pet	parrot:Kiwi	fact	chatter	0
+EV	QUERY	ep.1.mood		episodic		0
+EV	OBS	other.1.coffee	focused	episodic	chatter	0
+EV	QUERY	user.lang		pref		0
+EV	QUERY	user.hometown		fact		0
+EV	QUERY	user.employer		fact		0
+EV	OBS	ep.2.errand	noodles	episodic	user	0
+EV	OBS	user.pet	none	fact	user	0
+EV	OBS	ep.3.lunch	focused	episodic	user	0
+EV	OBS	user.pet	dog:Doudou	fact	chatter	0
+EV	OBS	user.meeting	noon	pref	user	0
+EV	OBS	user.coffee	espresso	pref	user	0
+EV	OBS	user.meeting	afternoon	pref	assistant	0
+EV	OBS	other.2.city	sunny	episodic	chatter	0
+EV	PIN	user.pet		fact	user	0
+EV	OBS	user.birthday	05-20	fact	user	0
+EV	OBS	user.music	techno	pref	user	0
+EV	OBS	user.music	techno	pref	user	0
+EV	QUERY	ep.2.errand		episodic		0
+EV	QUERY	ep.3.lunch		episodic		0
+EV	QUERY	user.meeting		pref		0
+EV	QUERY	user.pet		fact		0
+EV	QUERY	user.coffee		pref		0
+EV	OBS	other.3.pet	sunny	episodic	chatter	0
+EV	OBS	user.meeting	never-friday	pref	user	0
+EV	QUERY	user.birthday		fact		0
+EV	OBS	user.coffee	americano	pref	user	0
+EV	OBS	user.hometown	Hangzhou	fact	chatter	0
+EV	QUERY	user.birthday		fact		0
+EV	OBS	user.meeting	never-friday	pref	user	0
+EV	QUERY	user.theme		pref		0
+EV	OBS	user.music	jazz	pref	user	0
+EV	OBS	user.theme	high-contrast	pref	chatter	0
+EV	OBS	user.editor	emacs	pref	user	0
+EV	OBS	other.4.coffee	tired	episodic	chatter	0
+EV	OBS	user.meeting	never-friday	pref	assistant	0
+EV	OBS	ep.4.lunch	noodles	episodic	user	0
+EV	QUERY	user.editor		pref		0
+EV	OBS	user.lang	python	pref	user	0
+EV	QUERY	user.coffee		pref		0
+EV	CORRECT	user.coffee	americano	pref	correction	0
+EV	OBS	other.5.pet	pharmacy	episodic	chatter	0
+EV	QUERY	user.theme		pref		0
+EV	QUERY	user.editor		pref		0
+EV	OBS	user.lang	go	pref	chatter	0
+EV	OBS	user.music	jazz	pref	user	0
+EV	OBS	user.meeting	afternoon	pref	assistant	0
+EV	OBS	other.6.city	pharmacy	episodic	chatter	0
+EV	OBS	user.theme	solarized	pref	assistant	0
+EV	OBS	user.music	classical	pref	user	0
+EV	OBS	user.lang	python	pref	user	0
+EV	OBS	ep.5.errand	meetings	episodic	user	0
+EV	QUERY	user.pet		fact		0
+EV	OBS	user.coffee	americano	pref	user	0
+EV	OBS	other.7.coffee	meetings	episodic	chatter	0
+EV	OBS	user.employer	Orbital	fact	user	0
+EV	OBS	user.birthday	05-20	fact	user	0
+EV	QUERY	user.music		pref		0
+EV	OBS	user.lang	python	pref	assistant	0
+EV	QUERY	user.music		pref		0
+EV	QUERY	user.theme		pref		0
+EV	OBS	ep.6.lunch	bank	episodic	user	0
+EV	OBS	user.lang	rust	pref	assistant	0
+EV	QUERY	user.coffee		pref		0
+EV	QUERY	user.lang		pref		0
+EV	CORRECT	user.lang	python	pref	correction	0
+EV	OBS	user.hometown	Kunming	fact	user	0
+EV	QUERY	user.theme		pref		0
+EV	OBS	other.8.city	tired	episodic	chatter	0
+EV	OBS	ep.7.mood	focused	episodic	user	0
+EV	QUERY	user.meeting		pref		0
+EV	CORRECT	user.meeting	never-friday	pref	correction	0
+GATE
+EV	QUERY	ep.7.mood		episodic		0
+EV	QUERY	user.lang		pref		0
+EV	QUERY	user.theme		pref		0
+EV	OBS	user.lang	python	pref	user	0
+EV	OBS	user.coffee	flat-white	pref	user	0
+EV	OBS	user.editor	emacs	pref	user	0
+EV	OBS	user.theme	solarized	pref	user	0
+EV	OBS	ep.8.errand	sunny	episodic	user	0
+EV	QUERY	ep.7.mood		episodic		0
+EV	QUERY	ep.8.errand		episodic		0
+EV	QUERY	ep.8.errand		episodic		0
+EV	OBS	other.9.coffee	dumplings	episodic	chatter	0
+EV	PIN	user.hometown		fact	user	0
+EV	OBS	user.coffee	flat-white	pref	user	0
+EV	QUERY	user.employer		fact		0
+EV	QUERY	user.coffee		pref		0
+EV	CORRECT	user.coffee	flat-white	pref	correction	0
+GATE

@@ -8,9 +8,15 @@ Phase A (first half): stable facts, preferences that drift slowly, chatter and a
 user's keys with wrong values (extraction errors), short-lived episodic notes.
 Phase B (second half, distribution shift): preferences drift 3x faster, a new `project` category appears whose
 updates arrive from teammates, and episodic volume doubles (memory-size pressure).
+
+Recall regime (recall=P > 0, or AURA_MEMORY_RECALL=P; default 0 = off): every other block of P events (both phases)
+is a recall block, where episodic queries are ~7x as frequent and ask about notes 30..150 events old ("what did I have for
+lunch last week?"). In the other blocks nobody reads old notes, so a short episodic ttl looks free there: the
+held-out gate's test case (a fix that wins on the current window and loses when an earlier regime returns).
 """
 from __future__ import annotations
 
+import os
 import random
 from dataclasses import dataclass, field
 
@@ -71,7 +77,16 @@ def _other(rng, pool, v):
     return rng.choice(xs)
 
 
-def stream(seed: int, n: int = 600, shift: float = 0.5) -> list[Event]:
+RECALL_AGE = (30, 150)
+
+
+def in_recall(ts: int, recall: int) -> bool:
+    return recall > 0 and (ts // recall) % 2 == 1
+
+
+def stream(seed: int, n: int = 600, shift: float = 0.5, recall: int | None = None) -> list[Event]:
+    if recall is None:
+        recall = int(os.environ.get("AURA_MEMORY_RECALL", "0") or 0)
     rng = random.Random(seed)
     w = World()
     out: list[Event] = []
@@ -140,9 +155,11 @@ def stream(seed: int, n: int = 600, shift: float = 0.5) -> list[Event]:
             src = "user" if rng.random() < 0.1 else "teammate"
             out.append(Event(ts, "OBS", k, v, "project", src, phase=ph))
         else:   # query
-            recent_ep = [k for (t, k) in w.ep_seen if ts - t <= 15]
+            R = in_recall(ts, recall)
+            recent_ep = ([k for (t, k) in w.ep_seen if RECALL_AGE[0] <= ts - t <= RECALL_AGE[1]] if R
+                         else [k for (t, k) in w.ep_seen if ts - t <= 15])
             proj_known = [k for k in PROJECT if k in w.truth]
-            choices = [("pref", 0.5), ("fact", 0.25), ("ep", 0.12 if recent_ep else 0.0),
+            choices = [("pref", 0.5), ("fact", 0.25), ("ep", (0.8 if R else 0.12) if recent_ep else 0.0),
                        ("proj", 0.3 if proj_known else 0.0)]
             tot = sum(p for _, p in choices)
             r = rng.random() * tot

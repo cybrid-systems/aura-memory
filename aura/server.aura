@@ -22,6 +22,9 @@
 (define *decay-batch-min* (if (getenv "AURA_MEMORY_DECAY_BATCH") (string->number (getenv "AURA_MEMORY_DECAY_BATCH")) 256))
 (define *gate-prune* (if (getenv "AURA_MEMORY_GATE_PRUNE") (not (equal? (getenv "AURA_MEMORY_GATE_PRUNE") "0")) #t))
 (define *ck-every* 20)
+;; bulk expiry (one trie walk, t-keep) only for at least this many dropped items: the walk visits all 4096 buckets
+;; (~22 ms) even when the store is tiny, while a per-item st-drop costs tens of microseconds (R10 profile)
+(define *bulk-min* (if (getenv "AURA_MEMORY_BULK_MIN") (string->number (getenv "AURA_MEMORY_BULK_MIN")) 256))
 ;; bulk-expiry rec update from per-category groups (default) or the per-item tally (AURA_MEMORY_CX_GROUPS=0, kept for
 ;; the equivalence test)
 (define *cx-groups* (if (getenv "AURA_MEMORY_CX_GROUPS") (string->number (getenv "AURA_MEMORY_CX_GROUPS")) 1))
@@ -400,7 +403,7 @@
             ;; A gate replay logs nothing, and a batched decay orders each key's items when they are read
             ;; (batch-key-items), so both skip this O(n log n) interpreted sort
             (let ((dropped (if (or *replaying* (decay-batched? (length acc))) acc (by-id-desc acc))))
-              (list (if (> (* 8 (length dropped)) (st-count s))
+              (list (if (let ((d (length dropped))) (and (>= d *bulk-min*) (> (* 8 d) (st-count s))))
                         (st-bulk-drop s dropped groups now)
                         (let dl ((s s) (ds dropped)) (if (null? ds) s (dl (st-drop s (car ds)) (cdr ds)))))
                     dropped))

@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import subprocess
 import sys
@@ -88,6 +89,7 @@ def main(argv=None):
     b.add_argument("--n", type=int, default=600)
     b.add_argument("--jobs", type=int, default=3)
     b.add_argument("--noise", type=float, default=0.0)
+    b.add_argument("--recall", type=int, default=None, help="recall-regime block length in phase B (sets AURA_MEMORY_RECALL)")
     b.add_argument("--modes", nargs="+", default=list(MODES))
     b.add_argument("--out", default="runs")
     r = sub.add_parser("run")
@@ -105,6 +107,8 @@ def main(argv=None):
     sub.add_parser("acceptance")
     a = ap.parse_args(argv)
     if a.cmd == "bench":
+        if a.recall is not None:
+            os.environ["AURA_MEMORY_RECALL"] = str(a.recall)
         res = bench(a.modes, a.seeds, a.n, a.out, a.jobs, a.noise)
         print(report(res))
     elif a.cmd == "run":

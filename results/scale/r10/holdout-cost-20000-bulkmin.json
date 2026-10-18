@@ -1,0 +1,82 @@
+[
+ {
+  "n": 20000,
+  "k": 0,
+  "gate_ms": 4597.1,
+  "verdict": "KEEP",
+  "chosen": "ttl\tepisodic\t5\toverfit",
+  "scores": [
+   {
+    "size": 20062,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 22,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 43,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 4,
+    "correct": 68,
+    "labeled": 69
+   }
+  ],
+  "rss_before_mb": 237.8,
+  "rss_after_mb": 272.6,
+  "size_after": 20062
+ },
+ {
+  "n": 20000,
+  "k": 2,
+  "gate_ms": 10790.1,
+  "verdict": "KEEP",
+  "chosen": "ttl\tepisodic\t60",
+  "scores": [
+   {
+    "size": 20062,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 22,
+    "correct": 68,
+    "heldout": {
+     "base": 177,
+     "correct": 177,
+     "ms": 3037,
+     "veto": false,
+     "windows": 2,
+     "labeled": 177
+    },
+    "labeled": 69
+   },
+   {
+    "size": 43,
+    "correct": 68,
+    "labeled": 69
+   },
+   {
+    "size": 4,
+    "correct": 68,
+    "heldout": {
+     "base": 177,
+     "correct": 170,
+     "ms": 2843,
+     "veto": true,
+     "windows": 2,
+     "labeled": 177
+    },
+    "labeled": 69
+   }
+  ],
+  "rss_before_mb": 254.5,
+  "rss_after_mb": 295.2,
+  "size_after": 20062
+ }
+]

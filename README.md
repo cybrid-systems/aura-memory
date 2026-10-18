@@ -251,6 +251,29 @@ The gate used to judge a candidate only on the evidence window, which is the sam
 * **Profile and the fix** (`current-time-ms` instrumentation; there is no perf or gdb in the image). At 20k with K=0, 6.2 s of the 6.85 s gate went to 17 store sweeps. Each first sweep under a trial ttl took ~1.9 s: 0.46 s for the split, **0.94 s for the per-item category tally** (`cx-drop-many`, a `cx-pos` + `list-ref` per dropped item, ~47 µs each) and 0.43 s for `t-keep`. `store-sweep` already has the expired items per category, so `cx-drop-groups` now takes those groups and uses a native `length`. Only tracked categories walk their items (`counted?`). Results are identical: same scores, sizes and verdicts in the overfit run, and the same gates, STATS, GET probes and size rows as the stored 20k `scale_learn` run. The gate gets faster: overfit run 6.80 → **4.94 s**, `scale_learn --old-every 0` 4.37 → **3.23 s** (`results/scale/r8b/`). `AURA_MEMORY_CX_GROUPS=0` restores the old tally. The later sweeps are small (~22–25 ms each), because `t-keep` walks all 4,096 trie buckets even when the store is tiny. That is the next cut.
 * **Aura bugs found on the way** (all in `c6a18e8a5` and later, none on `e50951bff`). A micro-benchmark of the expiry tally gave wrong answers on current main. Shrinking it gave **aura#4629**: a list of 2,000 `(i "episodic")` pairs built in a tail loop ends up with 18 self-referential elements. This is probably the root of aura#4623/#4625/#4627. Also **aura#4628**: `member` compares pairs, vectors and floats by identity. aura-memory only uses `member` on strings, so it is unaffected.
 
+### Recall regime: where the held-out gate pays off
+
+The R8 bench never exercised the held-out gate, because no earlier regime ever returned. `AURA_MEMORY_RECALL=P` (bench `--recall P`, default off) makes every other block of P events a recall block: episodic queries become ~7× as frequent and ask about notes 30–150 events old. In the other blocks only notes ≤15 events old are read. So when the size check proposes `ttl episodic 60`, it ties on correctness in a normal block and wins on size, and only a held-out window that contains a recall block shows the loss.
+
+5 seeds, 1,200 events, P = 100, on `e50951bff` (`results/recall/`):
+
+| | accuracy | user corrections | episodic accuracy | final / mean size | KEEP / ROLLBACK | gate p50 |
+|---|---:|---:|---:|---:|---:|---:|
+| noise 0, K=0 | 96.6% | 9.6 | 95.0% | 79 / 52 | 4.4 / 0.4 | 160 ms |
+| noise 0, K=1 | 97.6% | 7.2 | 98.8% | 120 / 66 | 3.0 / 1.4 | 241 ms |
+| noise 0, **K=2** | **97.7%** | **6.8** | **99.1%** | 141 / 72 | 2.6 / 2.0 | 285 ms |
+| noise 1.0, K=0 | 76.6% | 69.0 | 78.8% | 55 / 46 | 1.4 / 13.0 | 96 ms |
+| noise 1.0, K=1 | 81.0% | 55.6 | 94.1% | 89 / 56 | 0.8 / 11.8 | 103 ms |
+| noise 1.0, **K=2** | **82.0%** | **53.6** | **97.2%** | 135 / 68 | 0.4 / 12.2 | 102 ms |
+
+Baselines on the same streams: fixed 82.7%, append-only 81.4%, adaptive without a gate 95.9% (noise 0) / 73.3% (noise 1.0).
+
+* **The veto works as designed.** On seed 0 (noise 0), K=0 KEEPs `ttl episodic 60` at t=495. Recall queries then fail, and three corrections push the ttl to 120 and then 240. K≥1 vetoes the same pair of candidates at t=495, and the learner later keeps `ttl 120` at t=841.
+* **Under full diagnosis noise, the K=0 learner falls below the fixed baseline** (76.6% vs 82.7%), because noisy diagnoses keep getting short ttls accepted. K=2 brings it back to 82.0% and raises episodic accuracy from 78.8% to 97.2%.
+* **The cost** is a bigger store (final size 79 → 141, because fewer ttls win) and roughly 2× gate time on the clean stream. The standard bench (no recall) is unchanged for every K (see Held-out gate). Making K=2 the default is reasonable for workloads where old context comes back.
+* **Small-store sweeps.** Bulk expiry now needs at least `AURA_MEMORY_BULK_MIN` (default 256) dropped items. Below that, items are dropped one by one instead of walking all 4,096 trie buckets. Results are identical: gates, STATS, GET probes and sizes in the 20k `scale_learn` run, and every bench table. It helps big stores: 20k `scale_learn` gate 3.23 → 3.03 s, overfit gate 4.94 → 4.60 s (K=0) and 10.8 s (K=2; 16.0 s in R8). On the 600–1,200-event benches the change is within noise.
+* **Current Aura main can't run this.** On `39595edd4` the bench hangs. The current server's first GATE dies with `list-ref: index out of bounds` (6/6 runs; on `e50951bff` it answers `KEEP resolve pref latest`). The error reply never reaches the client, so the worker waits forever. That is aura#4611, which until now was only seen on the released server. `acceptance/4611-current` freezes the server and the 103-request trace.
+
 ## Caveats
 
 * **The stream is synthetic and designed to stress the seed policy.** Preferences drift, a new trusted source appears, and episodic volume grows. The seed is deliberately conservative (`keep-first`, user-only), which is a defensible white-box default, not a straw man, but the learner only has to find a few rule flips. The "fixed white-box" baseline is my approximation of a PilotDeck-like fixed policy, not PilotDeck itself.
@@ -270,7 +293,7 @@ The gate used to judge a candidate only on the evidence window, which is the sam
 | cybrid-systems/aura#4585 | host-program calls are much slower after one `set-code` | fixed upstream: query p50 23 ms → 1.1 ms | `acceptance/4585` (PASS), `results/latency.txt` |
 | cybrid-systems/aura#4586 (filed from here) | an error raised inside a `map`/`filter` callback is swallowed: `try` can't catch it, `map` returns `<unknown>`, `filter` keeps the element | fixed upstream. It had hidden a gate bug: candidates silently ran with the old policy | `acceptance/4586` (PASS) |
 | cybrid-systems/aura#4609 (open) | under `aura soft`, `mutate:rebind` is guard-rejected (`commit-not-ready`), so the Soft auto-grant from #4575 can't be used | `AURA_SANDBOX=off` + container memory cap | – |
-| cybrid-systems/aura#4611 (open, filed from here) | regression in `c6a18e8a5` (#4599): a `filter` predicate gets the wrong element (`=` on `(car i)` sees a pair). The released server's first GATE dies with `list-ref: index out of bounds` | **pinned to `e50951bff`**, which is unaffected (`c6a18e8a5` and `9f82bede1` FAIL the check) | `acceptance/4611` (PASS on `e50951bff`) |
+| cybrid-systems/aura#4611 (open, filed from here) | regression in `c6a18e8a5` (#4599): a `filter` predicate gets the wrong element (`=` on `(car i)` sees a pair). The released server's first GATE dies with `list-ref: index out of bounds`, and since R10 the current server's does too on a recall-stream trace (the bench hangs) | **pinned to `e50951bff`**, which is unaffected (`c6a18e8a5` and `9f82bede1` FAIL the check) | `acceptance/4611`, `acceptance/4611-current` (PASS on `e50951bff`, FAIL on `39595edd4`) |
 | cybrid-systems/aura#4625 (open, filed from here) | regression in `c6a18e8a5`, still on `9f82bede1`: a fold whose callback `set!`s captured `let` locals leaves a self-referential cons in an unrelated global vector (provenance lost, printing segfaults) | the expiry split threads its accumulator through the fold; current tests pass on `9f82bede1` too | `acceptance/4625` (PASS on `e50951bff`) |
 | cybrid-systems/aura#4629 (open, filed from here) | regression in `c6a18e8a5`, still on `39595edd4`: building a list of pairs with a tail loop leaves 18 of 2,000 elements self-referential. This is the store/index/replay build shape, and probably the root of #4623/#4625/#4627 | **pinned to `e50951bff`** | `acceptance/4629` (PASS on `e50951bff`, FAIL on `39595edd4`) |
 | cybrid-systems/aura#4627 (open, filed from aura-harness) | regression in `c6a18e8a5`: `(equal? (list 1 2) x)` is `#f` on every 66th loop iteration (vectors: every 131st) | pinned; the server compares strings and numbers, which are unaffected | – |
@@ -303,9 +326,8 @@ tests/                    unit tests (stream invariants; white-box ops, provenan
 
 * The gate now stops losing candidates early and allocates little, but a trial still costs ~2 s per candidate at 20,000 items (the checkpoint's store walk plus the trial ttl's first sweep). Next: gate on a sampled window store, so a trial doesn't touch every item. Allocation cost rising with heap size (aura#4474) and interpreter overhead (aura#4599) are the Aura-side floors.
 * Move to a newer Aura main once aura#4629 (list corruption), #4611, #4625 and #4627 are fixed. On `39595edd4` (latest checked) `acceptance/4611`, `4625` and `4629` still FAIL (`results/acceptance-39595edd4.txt`).
-* Make small-store sweeps per-item instead of walking all 4,096 trie buckets (~25 ms per sweep after the first one).
 * Switch from `AURA_SANDBOX=off` to `aura soft` once aura#4609 is fixed.
-* Make the held-out gate cheaper by replaying all candidates in one pass over the held-out windows, then consider turning it on by default. Find a stream where held-out answers actually change (a regime that comes back).
+* Make the held-out gate cheaper by replaying all candidates in one pass over the held-out windows, then consider turning it on by default. Try K=2 as the default and sample held-out windows from further back than the last K.
 * Let the learner mutate `src-weight` / ranking, and add fuzzy (embedding) retrieval to the data plane.
 * Run more seeds, sweep the noise from 0.3 to 1.0, and try a real conversation log instead of the synthetic stream.
 
