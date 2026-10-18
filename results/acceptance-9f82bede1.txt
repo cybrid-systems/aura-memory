@@ -1,0 +1,15 @@
+== acceptance on /workspace/aura-main-bin-9f82bede1/aura
+PASS  memory-cycle  aura-memory: snapshot, rebind 2 policy defines, restore -> byte-identical source; rebind + keep
+      got: (cycle #t #t #t)
+PASS  4583          10 rebinds next to a self-recursive define stay flat (no 4x-per-rebind blow-up)
+      got: (bounded #t)
+PASS  4584          2nd call of a workspace define whose sibling uses filter runs the right define
+      got: (call2 (8 (a)))
+PASS  4585          a host-program loop is not >3x slower after one set-code
+      got: (ratio<3 #t)
+PASS  4586          an error inside a map callback reaches try
+      got: caught
+FAIL  4611          the released server's (52c90f4) first GATE (18-event trace) replays and answers KEEP (c6a18e8a5: list-ref out of bounds)
+      got: error: 481:2: type error: list-ref: index out of bounds
+FAIL  4625          a frozen server (sweep-cat fold with set!) + 102-event trace: GET e10 keeps its provenance (c6a18e8a5: index bucket becomes a self-referential cons, provenance lost)
+      got: (no match, rc=0)

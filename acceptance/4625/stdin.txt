@@ -1,0 +1,103 @@
+EV	OBS	e0	v	episodic	user	0
+EV	OBS	e1	v	episodic	user	0
+EV	OBS	e2	v	episodic	user	0
+EV	OBS	e3	v	episodic	user	0
+EV	OBS	e4	v	episodic	user	0
+EV	OBS	e5	v	episodic	user	0
+EV	OBS	e6	v	episodic	user	0
+EV	OBS	e7	v	episodic	user	0
+EV	OBS	e8	v	episodic	user	0
+EV	OBS	e9	v	episodic	user	0
+EV	OBS	e10	v	episodic	user	0
+EV	OBS	e11	v	episodic	user	0
+EV	OBS	e12	v	episodic	user	0
+EV	OBS	e13	v	episodic	user	0
+EV	OBS	e14	v	episodic	user	0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+EV	QUERY	nothing		pref		0
+APPLY
+EV	QUERY	nothing		pref		0
+GET	e10

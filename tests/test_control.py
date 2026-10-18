@@ -206,3 +206,72 @@ class LearnerGateTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _with_env(**kv):
+    """Start an AuraMemory with temporary server env overrides."""
+    def start(*a, **k):
+        old = {n: os.environ.get(n) for n in kv}
+        os.environ.update(kv)
+        try:
+            return AuraMemory(*a, **k)
+        finally:
+            for n, v in old.items():
+                if v is None: os.environ.pop(n, None)
+                else: os.environ[n] = v
+    return start
+
+
+def _ttl_run(m):
+    """15 episodic items, ttl episodic 60 kept, then the bulk expiry; returns every white-box view."""
+    for i in range(15):
+        m.obs(f"e{i}", "v", "episodic", "user")
+    ts = 15
+    while True:
+        res = m.query("nothing", "pref"); ts = res["ts"]
+        if res.get("propose"): break
+    m.apply()
+    decays = []
+    while ts < 130:
+        res = m.query("nothing", "pref"); ts = res["ts"]
+        if res["decayed"]: decays.append((ts, res["decayed"]))
+    st = m.stats()
+    return decays, [m.get(f"e{i}") for i in range(15)], m.list(), st
+
+
+@NEED
+class EquivalenceTest(unittest.TestCase):
+    def test_decay_batches_match_per_item_log(self):
+        # a bulk expiry is logged as one batch record; GET must still show the same per-key obs/prov records
+        runs = []
+        for b in ("1", "0"):
+            m = _with_env(AURA_MEMORY_DECAY_BATCH=b)(policy="seed", learn=True, min_evidence=1)
+            try:
+                runs.append(_ttl_run(m))
+            finally:
+                m.close()
+        (d1, g1, l1, s1), (d0, g0, l0, s0) = runs
+        self.assertEqual(d1, [(100, 15)])
+        self.assertEqual((d1, g1, l1), (d0, g0, l0))
+        self.assertIn("decay", [o["outcome"] for o in g1[0]["observations"]] + [p["op"] for p in g1[0]["provenance"]])
+
+    def test_gate_prune_does_not_change_verdicts(self):
+        out = []
+        for p in ("1", "0"):
+            m = _with_env(AURA_MEMORY_GATE_PRUNE=p)(policy="seed", learn=True, min_evidence=1)
+            try:
+                m.obs("user.theme", "dark", "pref", "user")
+                m.obs("user.theme", "light", "pref", "chatter")
+                m.query("user.theme", "pref")
+                m.correct("user.theme", "light", "pref")
+                v1 = m.gate()
+                m.obs("user.coffee", "latte", "pref", "user")
+                m.obs("user.coffee", "flat white", "pref", "user")
+                m.query("user.coffee", "pref")
+                r = m.correct("user.coffee", "flat white", "pref")
+                v2 = m.gate() if r.get("propose") else {}
+                out.append([(v.get("verdict"), v.get("chosen"), v.get("version")) for v in (v1, v2)]
+                           + [m.policy()["source"]])
+            finally:
+                m.close()
+        self.assertEqual(out[0], out[1])

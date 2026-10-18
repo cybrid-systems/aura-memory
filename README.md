@@ -62,14 +62,14 @@ flowchart LR
 ## Run it
 
 ```bash
-export AURA_BIN=~/aura/build-rel/aura      # Aura build-rel binary (tested: main e50951bff; c6a18e8a5 breaks the gate, aura#4611)
+export AURA_BIN=~/aura/build-rel/aura      # Aura build-rel binary (tested: main e50951bff; c6a18e8a5 and 9f82bede1 break the gate, aura#4611, and corrupt the heap, aura#4625)
 scripts/test.sh --docker                   # unit tests (control-plane tests need AURA_BIN)
 scripts/bench.sh --docker                  # acceptance + in-process latency + 4-mode bench, prints tables
 scripts/bench.sh --docker --noise 1.0 --modes adaptive adaptive-nogate   # noise ablation
 scripts/in-docker.sh 'python3 -m aura_memory inspect --seed 0 --upto 400' # white-box tour
 scripts/in-docker.sh 'python3 -m aura_memory run --mode adaptive --seed 3' # every verdict of one stream
 scripts/in-docker.sh 'python3 scripts/scale.py --n 20000 --block 4000 --steady 8000 --out results/scale/index-20k.json'  # store scaling
-AURA_HARNESS_MEM=8g scripts/in-docker.sh 'python3 scripts/scale_learn.py --n 20000 --events 600'  # learning on a big store
+AURA_MEMORY_MEM=8g scripts/in-docker.sh 'python3 scripts/scale_learn.py --n 20000 --events 600'  # learning on a big store (--old-every 0: the ttl wins)
 ```
 
 `--docker` runs inside `ghcr.io/cybrid-systems/dev:v1.0.9` with `--memory=4g`, `AURA_SANDBOX=off`, `AURA_PIPELINE_STRICT=0`.
@@ -210,6 +210,29 @@ A 600-event stream now takes about 1 s of wall time per mode (was 12–39 s).
   * **aura#4616 (new).** `(map f l1 l2)` silently ignores every list after the first: `f` gets one argument and the result is `()`s, `0`s or partial procedures. Field updates use native `map` with a position counter instead. That costs ~38 µs per 12-field item, against 95 µs for the interpreted copy loop. A retrieval hit's three field updates now take one pass (50 µs instead of 285 µs).
   * Interpreter overhead is still the floor (aura#4599): about 1 µs per primitive call, so a 12-field functional update costs tens of µs.
 
+### Gate early stop and allocation-light expiry
+
+The gate replays the window from a checkpoint once per candidate. At 20,000 items most of that time went into the first bulk-expiry sweep and into per-item logging, and both are allocation-bound. Aura's per-cons cost grows with the live heap above ~1M cells (aura#4474): on this machine an allocation loop costs 5.0 µs per iteration with 0.3M live cells and 10.9 µs with 3M, while an empty loop stays at 2.1 µs. So this round cut allocations, not algorithmic work:
+
+* **Early stop.** A candidate's replay stops as soon as `correct + remaining labeled events < best so far`. A stopped score is reported as `{"pruned": true, "replayed": k}`, and the verdict is unchanged because the candidate couldn't have won. Candidates are scored one at a time against the running best. `AURA_MEMORY_GATE_PRUNE=0` turns it off.
+* **Bulk expiry without per-item garbage.**
+  * Category counts are tallied into vectors (no cons per dropped item).
+  * The first sweep under a new ttl splits a category in one trie walk instead of `cat-items` plus two filters.
+  * Gate replays and batched decays skip the newest-first sort of the dropped list.
+* **Decay batches.** A live sweep that expires at least `AURA_MEMORY_DECAY_BATCH` items (default 256; 0 = off) logs one batch record instead of an observation, a provenance record and two index inserts per item. GET, `diagnose` and STATS rebuild the same per-key records in the same order from the batch.
+
+20,000 items, 600 events, host round trips on `e50951bff` (`results/scale/r6/`; `before` = the 2ffc8ae server):
+
+| run | GATE before → now | first expiry event before → now | verdict / scores |
+|---|---:|---:|---|
+| `--old-every 7` (old items still read: both ttl candidates lose) | 9.4 s → **4.2 s** (6.6 s with `GATE_PRUNE=0`) | 1.47 s → 1.32 s | ROLLBACK, both candidates stopped after 67 replayed events |
+| `--old-every 0` (nothing old is read: the ttl wins) | 8.9 s → **4.3 s** | 19.4 s → **3.8 s** (the kept ttl expires 20,000 items live) | KEEP `ttl episodic 60`, scores identical |
+
+* **Same answers.** With pruning off, final STATS, the GET probes (`e1`, `e2`, `e10000`, `e20000`, `h1`) and the gate scores are identical to the 2ffc8ae server. The 5 agent streams and 3 white-box stress seeds show 0 semantic diffs with pruning on (pruned scores masked), with batch threshold 256 and with batch threshold 1. Two new tests check batch vs per-item GET and prune on vs off verdicts.
+* **The standard bench barely notices** (`results/scale/r6/bench-prune-{on,off}.md`). Accuracy is identical and gate p50 is 135 vs 133 ms. Only 2 of 88 candidate scores are stopped, because at 600 events the candidates usually tie or win.
+* **What's left** is ~2 s per candidate at 20,000 items: the checkpoint's store walk and the trial ttl's first sweep, which are still O(store) interpreted work at about 1 µs per primitive (aura#4599) plus the heap-size allocation tax (aura#4474).
+* **aura#4625 (new, filed from here).** The first version of the one-pass split accumulated with `set!` on two captured `let` locals. On `c6a18e8a5` and `9f82bede1` that left a self-referential cons in the global provenance index, so GET lost a key's provenance and printing the key segfaulted. The split now threads an `(expired . kept)` pair through the fold, with the same replies and the same speed. `acceptance/4625` freezes the failing server with the 102-request trace that triggers it.
+
 ## Caveats
 
 * **The stream is synthetic and designed to stress the seed policy.** Preferences drift, a new trusted source appears, and episodic volume grows. The seed is deliberately conservative (`keep-first`, user-only), which is a defensible white-box default, not a straw man, but the learner only has to find a few rule flips. The "fixed white-box" baseline is my approximation of a PilotDeck-like fixed policy, not PilotDeck itself.
@@ -229,10 +252,11 @@ A 600-event stream now takes about 1 s of wall time per mode (was 12–39 s).
 | cybrid-systems/aura#4585 | host-program calls are much slower after one `set-code` | fixed upstream: query p50 23 ms → 1.1 ms | `acceptance/4585` (PASS), `results/latency.txt` |
 | cybrid-systems/aura#4586 (filed from here) | an error raised inside a `map`/`filter` callback is swallowed: `try` can't catch it, `map` returns `<unknown>`, `filter` keeps the element | fixed upstream. It had hidden a gate bug: candidates silently ran with the old policy | `acceptance/4586` (PASS) |
 | cybrid-systems/aura#4609 (open) | under `aura soft`, `mutate:rebind` is guard-rejected (`commit-not-ready`), so the Soft auto-grant from #4575 can't be used | `AURA_SANDBOX=off` + container memory cap | – |
-| cybrid-systems/aura#4611 (open, filed from here) | regression in `c6a18e8a5` (#4599): a `filter` predicate gets the wrong element (`=` on `(car i)` sees a pair). The released server's first GATE dies with `list-ref: index out of bounds` | **pinned to `e50951bff`**, which is unaffected (`c6a18e8a5` FAILs the check) | `acceptance/4611` (PASS on `e50951bff`) |
+| cybrid-systems/aura#4611 (open, filed from here) | regression in `c6a18e8a5` (#4599): a `filter` predicate gets the wrong element (`=` on `(car i)` sees a pair). The released server's first GATE dies with `list-ref: index out of bounds` | **pinned to `e50951bff`**, which is unaffected (`c6a18e8a5` and `9f82bede1` FAIL the check) | `acceptance/4611` (PASS on `e50951bff`) |
+| cybrid-systems/aura#4625 (open, filed from here) | regression in `c6a18e8a5`, still on `9f82bede1`: a fold whose callback `set!`s captured `let` locals leaves a self-referential cons in an unrelated global vector (provenance lost, printing segfaults) | the expiry split threads its accumulator through the fold; current tests pass on `9f82bede1` too | `acceptance/4625` (PASS on `e50951bff`) |
 | cybrid-systems/aura#4612 (open, filed from here) | `hash-ref` scans every slot, so a miss is O(table size) | the store index doesn't use `(hash)`; the key hash is computed, not memoised | – |
 | cybrid-systems/aura#4613 (open, filed from here) | `vector->list` / `list->vector` / `(hash)` garbage is never reclaimed | trie nodes are lists, not vectors | – |
-| cybrid-systems/aura#4474 (reopened from here) | the reclaimer re-marks the whole live heap every ≤32,768 allocations, so allocation cost grows with the live heap above ~1M objects | the store index is allocation-light (see Learning at scale) | – |
+| cybrid-systems/aura#4474 (reopened from here) | the reclaimer re-marks the whole live heap every ≤32,768 allocations, so allocation cost grows with the live heap above ~1M objects | the store index, bulk expiry and decay logging are allocation-light (see Learning at scale and the gate early stop section); still present on `9f82bede1` | – |
 | cybrid-systems/aura#4616 (new, filed from here) | `(map f l1 l2)` silently ignores every list after the first | field updates use 1-list `map` with a position counter | – |
 | cybrid-systems/aura#4614 (open, filed from here) | no persistent map; std `hash-set` mutates; `vector-copy` is interpreted; no string hash | hand-rolled list trie | – |
 
@@ -248,15 +272,15 @@ aura/closed_loop_bench.aura  in-process latency micro-benchmark
 scripts/scale.py          store-size scaling (N facts + queries, optional steady phase)
 scripts/scale_learn.py    learning at scale (big store + size check + gate + forgetting)
 aura_memory/              host: stream.py, control.py, agent.py, bench.py, acceptance.py, proposer.py, __main__.py
-acceptance/               Aura issue repros + memory-cycle (4611: frozen 52c90f4 server + GATE trace on stdin)
+acceptance/               Aura issue repros + memory-cycle (4611 / 4625: frozen server + request trace on stdin)
 results/                  committed bench / noise / latency / acceptance outputs + one example version log
 tests/                    unit tests (stream invariants; white-box ops, provenance, KEEP/ROLLBACK against a real Aura)
 ```
 
 ## Next steps
 
-* The store and its per-category index keep queries at ~1 ms and the size check, forgetting and STATS off O(store) up to 20,000 items. The gate is the next big cost: a trial ttl that forgets most of a 20,000-item store still costs ~4.5 s per candidate (interpreted per-item work). Gate on a sampled window store, or let the gate stop a candidate early once it can't win. Allocation cost rising with heap size (aura#4474) and interpreter overhead (aura#4599) are the Aura-side floors.
-* Move to a newer Aura main once aura#4611 is fixed. `c6a18e8a5` halves loop overhead but breaks the gate.
+* The gate now stops losing candidates early and allocates little, but a trial still costs ~2 s per candidate at 20,000 items (the checkpoint's store walk plus the trial ttl's first sweep). Next: gate on a sampled window store, so a trial doesn't touch every item. Allocation cost rising with heap size (aura#4474) and interpreter overhead (aura#4599) are the Aura-side floors.
+* Move to a newer Aura main once aura#4611 and aura#4625 are fixed. `9f82bede1` (checked this round) roughly halves loop overhead, and the current server's tests pass on it, but the released server's GATE still fails (#4611) and the heap corruption in #4625 is still there.
 * Switch from `AURA_SANDBOX=off` to `aura soft` once aura#4609 is fixed.
 * Use a held-out replay split and sample older windows, so the gate stops judging on the evidence window.
 * Let the learner mutate `src-weight` / ranking, and add fuzzy (embedding) retrieval to the data plane.

@@ -1,0 +1,875 @@
+{
+ "n": 20000,
+ "events": 600,
+ "fill_s": 23.5,
+ "rows": [
+  {
+   "event": 100,
+   "size": 20019,
+   "ev_ms_p50": 1.63,
+   "ev_ms_p99": 1474.12,
+   "ev_ms_max": 1474.12,
+   "rss_mb": 272.1,
+   "wall_s": 11.1
+  },
+  {
+   "event": 200,
+   "size": 20020,
+   "ev_ms_p50": 2.0,
+   "ev_ms_p99": 5.67,
+   "ev_ms_max": 5.67,
+   "rss_mb": 272.1,
+   "wall_s": 11.3
+  },
+  {
+   "event": 300,
+   "size": 20020,
+   "ev_ms_p50": 1.8,
+   "ev_ms_p99": 77.14,
+   "ev_ms_max": 77.14,
+   "rss_mb": 272.2,
+   "wall_s": 11.6
+  },
+  {
+   "event": 400,
+   "size": 20020,
+   "ev_ms_p50": 1.74,
+   "ev_ms_p99": 103.02,
+   "ev_ms_max": 103.02,
+   "rss_mb": 272.2,
+   "wall_s": 11.9
+  },
+  {
+   "event": 500,
+   "size": 20020,
+   "ev_ms_p50": 1.8,
+   "ev_ms_p99": 75.01,
+   "ev_ms_max": 75.01,
+   "rss_mb": 272.3,
+   "wall_s": 12.1
+  },
+  {
+   "event": 600,
+   "size": 20020,
+   "ev_ms_p50": 1.71,
+   "ev_ms_p99": 4.54,
+   "ev_ms_max": 4.54,
+   "rss_mb": 272.3,
+   "wall_s": 12.3
+  }
+ ],
+ "gates": [
+  {
+   "event": 50,
+   "ms": 9438.4,
+   "verdict": "ROLLBACK",
+   "chosen": false,
+   "scores": [
+    {
+     "size": 20016,
+     "correct": 12,
+     "labeled": 12
+    },
+    {
+     "size": 36,
+     "correct": 7,
+     "labeled": 12
+    },
+    {
+     "size": 96,
+     "correct": 7,
+     "labeled": 12
+    }
+   ],
+   "size_before": 20016
+  }
+ ],
+ "ops_ms": {
+  "STATS": 6.9,
+  "LIST": 2163.3,
+  "LIST_cat": 294.8,
+  "GET": 1.5
+ },
+ "old_every": 7,
+ "final_stats": {
+  "pending": false,
+  "size": 20020,
+  "observations": 20343,
+  "version": 0,
+  "by_cat": [
+   [
+    "pref",
+    20
+   ],
+   [
+    "fact",
+    0
+   ],
+   [
+    "project",
+    0
+   ],
+   [
+    "episodic",
+    20000
+   ]
+  ],
+  "events": 20600,
+  "provenance": 20600
+ },
+ "probes": {
+  "e1": {
+   "observations": [
+    {
+     "val": "v1",
+     "ts": 0,
+     "key": "e1",
+     "cat": "episodic",
+     "outcome": "added",
+     "src": "user",
+     "id": 0
+    }
+   ],
+   "items": [
+    {
+     "val": "v1",
+     "hits": 0,
+     "ts": 0,
+     "key": "e1",
+     "cat": "episodic",
+     "last": 0,
+     "by": "admit",
+     "pinned": false,
+     "policy_version": 0,
+     "tier": "st",
+     "src": "user",
+     "id": 0
+    }
+   ],
+   "provenance": [
+    {
+     "val": "v1",
+     "detail": "",
+     "ts": 0,
+     "key": "e1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "added",
+     "id": 0
+    }
+   ]
+  },
+  "e2": {
+   "observations": [
+    {
+     "val": "v2",
+     "ts": 1,
+     "key": "e2",
+     "cat": "episodic",
+     "outcome": "added",
+     "src": "user",
+     "id": 1
+    }
+   ],
+   "items": [
+    {
+     "val": "v2",
+     "hits": 0,
+     "ts": 1,
+     "key": "e2",
+     "cat": "episodic",
+     "last": 1,
+     "by": "admit",
+     "pinned": false,
+     "policy_version": 0,
+     "tier": "st",
+     "src": "user",
+     "id": 1
+    }
+   ],
+   "provenance": [
+    {
+     "val": "v2",
+     "detail": "",
+     "ts": 1,
+     "key": "e2",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "added",
+     "id": 1
+    }
+   ]
+  },
+  "e10000": {
+   "observations": [
+    {
+     "val": "v10000",
+     "ts": 9999,
+     "key": "e10000",
+     "cat": "episodic",
+     "outcome": "added",
+     "src": "user",
+     "id": 9999
+    }
+   ],
+   "items": [
+    {
+     "val": "v10000",
+     "hits": 0,
+     "ts": 9999,
+     "key": "e10000",
+     "cat": "episodic",
+     "last": 9999,
+     "by": "admit",
+     "pinned": false,
+     "policy_version": 0,
+     "tier": "st",
+     "src": "user",
+     "id": 9999
+    }
+   ],
+   "provenance": [
+    {
+     "val": "v10000",
+     "detail": "",
+     "ts": 9999,
+     "key": "e10000",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "added",
+     "id": 9999
+    }
+   ]
+  },
+  "e20000": {
+   "observations": [
+    {
+     "val": "v20000",
+     "ts": 19999,
+     "key": "e20000",
+     "cat": "episodic",
+     "outcome": "added",
+     "src": "user",
+     "id": 19999
+    }
+   ],
+   "items": [
+    {
+     "val": "v20000",
+     "hits": 0,
+     "ts": 19999,
+     "key": "e20000",
+     "cat": "episodic",
+     "last": 19999,
+     "by": "admit",
+     "pinned": false,
+     "policy_version": 0,
+     "tier": "st",
+     "src": "user",
+     "id": 19999
+    }
+   ],
+   "provenance": [
+    {
+     "val": "v20000",
+     "detail": "",
+     "ts": 19999,
+     "key": "e20000",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "added",
+     "id": 19999
+    }
+   ]
+  },
+  "h1": {
+   "observations": [
+    {
+     "val": "x515",
+     "ts": 20514,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x514",
+     "ts": 20513,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x484",
+     "ts": 20483,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x479",
+     "ts": 20478,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x475",
+     "ts": 20474,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x466",
+     "ts": 20465,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x430",
+     "ts": 20429,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x418",
+     "ts": 20417,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x403",
+     "ts": 20402,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x374",
+     "ts": 20373,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x344",
+     "ts": 20343,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x313",
+     "ts": 20312,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x272",
+     "ts": 20271,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x236",
+     "ts": 20235,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x220",
+     "ts": 20219,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x191",
+     "ts": 20190,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x158",
+     "ts": 20157,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x155",
+     "ts": 20154,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x142",
+     "ts": 20141,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x121",
+     "ts": 20120,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x118",
+     "ts": 20117,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x88",
+     "ts": 20087,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "lost-conflict",
+     "src": "user",
+     "id": -1
+    },
+    {
+     "val": "x80",
+     "ts": 20079,
+     "key": "h1",
+     "cat": "pref",
+     "outcome": "added",
+     "src": "user",
+     "id": 20079
+    }
+   ],
+   "items": [
+    {
+     "val": "x80",
+     "hits": 11,
+     "ts": 20079,
+     "key": "h1",
+     "cat": "pref",
+     "last": 20506,
+     "by": "admit",
+     "pinned": false,
+     "policy_version": 0,
+     "tier": "lt",
+     "src": "user",
+     "id": 20079
+    }
+   ],
+   "provenance": [
+    {
+     "val": "x515",
+     "detail": "",
+     "ts": 20514,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x514",
+     "detail": "",
+     "ts": 20513,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x80",
+     "detail": "",
+     "ts": 20506,
+     "key": "h1",
+     "actor": "agent",
+     "policy_version": 0,
+     "op": "retrieve",
+     "id": 20079
+    },
+    {
+     "val": "x80",
+     "detail": "",
+     "ts": 20494,
+     "key": "h1",
+     "actor": "agent",
+     "policy_version": 0,
+     "op": "retrieve",
+     "id": 20079
+    },
+    {
+     "val": "x484",
+     "detail": "",
+     "ts": 20483,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x479",
+     "detail": "",
+     "ts": 20478,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x475",
+     "detail": "",
+     "ts": 20474,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x466",
+     "detail": "",
+     "ts": 20465,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x80",
+     "detail": "",
+     "ts": 20464,
+     "key": "h1",
+     "actor": "agent",
+     "policy_version": 0,
+     "op": "retrieve",
+     "id": 20079
+    },
+    {
+     "val": "x80",
+     "detail": "",
+     "ts": 20458,
+     "key": "h1",
+     "actor": "agent",
+     "policy_version": 0,
+     "op": "retrieve",
+     "id": 20079
+    },
+    {
+     "val": "x430",
+     "detail": "",
+     "ts": 20429,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x418",
+     "detail": "",
+     "ts": 20417,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x80",
+     "detail": "",
+     "ts": 20413,
+     "key": "h1",
+     "actor": "agent",
+     "policy_version": 0,
+     "op": "retrieve",
+     "id": 20079
+    },
+    {
+     "val": "x403",
+     "detail": "",
+     "ts": 20402,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x374",
+     "detail": "",
+     "ts": 20373,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x344",
+     "detail": "",
+     "ts": 20343,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x80",
+     "detail": "",
+     "ts": 20332,
+     "key": "h1",
+     "actor": "agent",
+     "policy_version": 0,
+     "op": "retrieve",
+     "id": 20079
+    },
+    {
+     "val": "x313",
+     "detail": "",
+     "ts": 20312,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x80",
+     "detail": "",
+     "ts": 20299,
+     "key": "h1",
+     "actor": "agent",
+     "policy_version": 0,
+     "op": "retrieve",
+     "id": 20079
+    },
+    {
+     "val": "x80",
+     "detail": "",
+     "ts": 20272,
+     "key": "h1",
+     "actor": "agent",
+     "policy_version": 0,
+     "op": "retrieve",
+     "id": 20079
+    },
+    {
+     "val": "x272",
+     "detail": "",
+     "ts": 20271,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x236",
+     "detail": "",
+     "ts": 20235,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x80",
+     "detail": "",
+     "ts": 20230,
+     "key": "h1",
+     "actor": "agent",
+     "policy_version": 0,
+     "op": "retrieve",
+     "id": 20079
+    },
+    {
+     "val": "x220",
+     "detail": "",
+     "ts": 20219,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x191",
+     "detail": "",
+     "ts": 20190,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x80",
+     "detail": "",
+     "ts": 20167,
+     "key": "h1",
+     "actor": "agent",
+     "policy_version": 0,
+     "op": "retrieve",
+     "id": 20079
+    },
+    {
+     "val": "x158",
+     "detail": "",
+     "ts": 20157,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x155",
+     "detail": "",
+     "ts": 20154,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x142",
+     "detail": "",
+     "ts": 20141,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x80",
+     "detail": "",
+     "ts": 20134,
+     "key": "h1",
+     "actor": "agent",
+     "policy_version": 0,
+     "op": "retrieve",
+     "id": 20079
+    },
+    {
+     "val": "x121",
+     "detail": "",
+     "ts": 20120,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x118",
+     "detail": "",
+     "ts": 20117,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x88",
+     "detail": "",
+     "ts": 20087,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "lost-conflict",
+     "id": -1
+    },
+    {
+     "val": "x80",
+     "detail": "",
+     "ts": 20079,
+     "key": "h1",
+     "actor": "user",
+     "policy_version": 0,
+     "op": "added",
+     "id": 20079
+    },
+    {
+     "val": "",
+     "detail": "",
+     "ts": 20035,
+     "key": "h1",
+     "actor": "agent",
+     "policy_version": 0,
+     "op": "retrieve",
+     "id": -1
+    },
+    {
+     "val": "",
+     "detail": "",
+     "ts": 20002,
+     "key": "h1",
+     "actor": "agent",
+     "policy_version": 0,
+     "op": "retrieve",
+     "id": -1
+    }
+   ]
+  }
+ }
+}

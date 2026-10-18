@@ -1,0 +1,822 @@
+;; aura-memory control plane server: the memory store, its management policy, the learner and the gate all live
+;; in this one Aura process. The host (aura_memory/control.py) only frames requests.
+;;
+;; Protocol: one request per stdin line (tab-separated), one response per stdout line: "R " + JSON.
+;;   EV kind key val cat src noise   stream event; kind = OBS | CORRECT | PIN | QUERY
+;;                                   -> {answer, outcome, id, propose, version, size, decayed}
+;;   GATE                            trial every pending candidate in its own worldline (store checkpoint +
+;;                                   candidate policy), replay the window, KEEP the best one or roll back
+;;   APPLY                           ungated: keep the first pending candidate
+;;   LIST [cat] | GET key | EDIT id val | DELETE id | PIN id | UNPIN id       white-box memory ops
+;;   POLICY | VERSIONS | FIND name | STATS | INDEX | LEARN 0|1 | PING | QUIT
+;;
+;; Memory = persistent Aura lists, so a checkpoint (a forked worldline) is O(1): it is the list value itself.
+;; Policy = workspace defines admit / resolve / ttl / promote-at / src-weight (policy_seed.aura), rewritten by
+;; mutate:rebind from the learner's rule tables and undone with ast:snapshot / ast:restore.
+
+(define *policy-path* (if (getenv "AURA_MEMORY_POLICY") (getenv "AURA_MEMORY_POLICY") "aura/policy_seed.aura"))
+(define *min-evidence* (if (getenv "AURA_MEMORY_MIN_EVIDENCE") (string->number (getenv "AURA_MEMORY_MIN_EVIDENCE")) 2))
+(define *window* (if (getenv "AURA_MEMORY_WINDOW") (string->number (getenv "AURA_MEMORY_WINDOW")) 100))
+;; gate early stop: a candidate's replay stops once correct-so-far + labeled queries left < the best score so far
+;; (it can then neither beat nor tie it). Sound, so verdicts are unchanged; 0 = replay every candidate in full.
+(define *decay-batch-min* (if (getenv "AURA_MEMORY_DECAY_BATCH") (string->number (getenv "AURA_MEMORY_DECAY_BATCH")) 0))   ;; acceptance/4625: per-item decay logging
+(define *gate-prune* (if (getenv "AURA_MEMORY_GATE_PRUNE") (not (equal? (getenv "AURA_MEMORY_GATE_PRUNE") "0")) #t))
+(define *ck-every* 20)
+(define *sweep-every* 10)
+(define *dead-age* 60)
+(define *dead-min* 12)
+
+;; ---------------------------------------------------------------- policy rule tables (mirror policy_seed.aura)
+(define seed-admit-table (list))                       ;; ("cat\tsrc" . #t/#f), newest first
+(define seed-resolve-table (list (cons "pref" "keep-first") (cons "fact" "keep-first")))
+(define seed-ttl-table (list))
+(define seed-promote-table (list))
+(define *admit-table* seed-admit-table)
+(define *resolve-table* seed-resolve-table)
+(define *ttl-table* seed-ttl-table)
+(define *promote-table* seed-promote-table)
+
+(define (q s) (string-append "\"" (string-replace (string-replace s "\\" "\\\\") "\"" "\\\"") "\""))
+(define (join-map f xs sep)
+  (if (null? xs) "" (if (null? (cdr xs)) (f (car xs)) (string-append (f (car xs)) sep (join-map f (cdr xs) sep)))))
+(define (assoc-set tbl k v) (cons (cons k v) (filter (lambda (e) (not (equal? (car e) k))) tbl)))
+(define (b->s b) (if b "#t" "#f"))
+(define (n->s n) (number->string n))
+
+(define (compile-admit)
+  (string-append "(lambda (cat src) (cond "
+    (join-map (lambda (e) (let ((cs (string-split (car e) "\t")))
+                            (string-append "((and (equal? cat " (q (car cs)) ") (equal? src " (q (cadr cs)) ")) " (b->s (cdr e)) ")")))
+              *admit-table* " ")
+    " ((equal? src \"user\") #t) (else #f)))"))
+(define (compile-cat-table tbl dflt-src)
+  (string-append "(lambda (cat) (cond "
+    (join-map (lambda (e) (string-append "((equal? cat " (q (car e)) ") " (cdr e) ")")) tbl " ")
+    " (else " dflt-src ")))"))
+(define (compile-resolve) (compile-cat-table (map (lambda (e) (cons (car e) (q (cdr e)))) *resolve-table*) "\"latest\""))
+(define (compile-ttl) (compile-cat-table (map (lambda (e) (cons (car e) (n->s (cdr e)))) *ttl-table*) "0"))
+(define (compile-promote) (compile-cat-table (map (lambda (e) (cons (car e) (n->s (cdr e)))) *promote-table*) "2"))
+
+;; ---------------------------------------------------------------- policy calls (memoised per policy version)
+(define *pcache* (hash))
+(define (pc-clear!) (set! *pcache* (hash)))
+(define (memo k thunk)
+  (if (hash-has-key? *pcache* k) (hash-ref *pcache* k #f)
+      (let ((v (thunk))) (hash-set! *pcache* k v) v)))
+(define (p-admit cat src) (memo (string-append "a\t" cat "\t" src) (lambda () (admit cat src))))
+(define (p-resolve cat) (memo (string-append "r\t" cat) (lambda () (resolve cat))))
+(define (p-ttl cat) (memo (string-append "t\t" cat) (lambda () (ttl cat))))
+(define (p-promote cat) (memo (string-append "p\t" cat) (lambda () (promote-at cat))))
+(define (p-weight src) (memo (string-append "w\t" src) (lambda () (src-weight src))))
+
+;; ---------------------------------------------------------------- items
+;; item = (id key val cat src ts last hits tier pinned pver by)
+(define (mk id key val cat src ts last hits tier pinned pver by) (list id key val cat src ts last hits tier pinned pver by))
+(define (it-id i) (list-ref i 0)) (define (it-key i) (list-ref i 1)) (define (it-val i) (list-ref i 2))
+(define (it-cat i) (list-ref i 3)) (define (it-src i) (list-ref i 4)) (define (it-ts i) (list-ref i 5))
+(define (it-last i) (list-ref i 6)) (define (it-hits i) (list-ref i 7)) (define (it-tier i) (list-ref i 8))
+(define (it-pinned i) (list-ref i 9)) (define (it-pver i) (list-ref i 10)) (define (it-by i) (list-ref i 11))
+;; functional field update through native map + a position counter: ~38 us vs ~95 us for an interpreted
+;; copy loop on e50951bff. (map f item idx) over two lists would be the obvious form, but Aura's map silently
+;; ignores every list after the first (cybrid-systems/aura#4616).
+(define (it-set i k v) (let ((j -1)) (map (lambda (x) (set! j (+ j 1)) (if (= j k) v x)) i)))
+;; a retrieval hit: hits, last and tier in one pass (was three nested it-set copies)
+(define (it-hit i h now tier)
+  (let ((j -1)) (map (lambda (x) (set! j (+ j 1)) (cond ((= j 6) now) ((= j 7) h) ((= j 8) tier) (else x))) i)))
+(define (it->hash i)
+  (hash "id" (it-id i) "key" (it-key i) "val" (it-val i) "cat" (it-cat i) "src" (it-src i) "ts" (it-ts i)
+        "last" (it-last i) "hits" (it-hits i) "tier" (it-tier i) "pinned" (it-pinned i) "policy_version" (it-pver i)
+        "by" (it-by i)))
+(define (with-key items key) (filter (lambda (i) (equal? (it-key i) key)) items))
+(define (without-key items key) (filter (lambda (i) (not (equal? (it-key i) key))) items))
+(define (any-pinned xs) (if (null? xs) #f (if (it-pinned (car xs)) #t (any-pinned (cdr xs)))))
+(define (find-val xs v) (if (null? xs) #f (if (equal? (it-val (car xs)) v) (car xs) (find-val (cdr xs) v))))
+(define (replace-item items new)
+  (map (lambda (i) (if (equal? (it-id i) (it-id new)) new i)) items))
+
+;; ---------------------------------------------------------------- store index (persistent, copy-on-write)
+;; store = (count root cats - cx). root is an 8-ary trie of depth 4 (4096 buckets) built from plain 8-element lists;
+;; a bucket is a list of the items whose key hashes there, newest first. A write path-copies 4 nodes and one bucket,
+;; so a store value is never mutated after it is built and a checkpoint is still just the value (O(1)), while writes
+;; and queries cost O(bucket) instead of O(store). cats = categories ever stored (sweep fast path); the 4th slot
+;; (formerly occ) is unused; cx = per-category index (below). Lists, not vectors: vector-copy is an interpreted std loop
+;; (~560 us for 64 slots) and vector->list / list->vector results are never reclaimed. Aura has no persistent map and
+;; no string hash primitive (std/hash hash-set is hash-set!), hence this.
+(define *nb* 4096)
+(define *divs* (list 512 64 8 1))
+(define empty-node (list #f #f #f #f #f #f #f #f))
+;; Bucket hash of a key from its length and 5 sampled characters: O(1), because a full fold costs ~50 us interpreted
+;; (no native string hash) and memoising it in a hash table is worse at scale (hash-ref scans every slot, so a miss
+;; is O(table): ~0.8 ms at 40k keys). Collisions only make buckets longer; they never change results.
+(define (kc k i) (char->integer (string-ref k i)))
+(define (key-hash k)
+  (let ((n (string-length k)))
+    (if (= n 0) 0
+        (modulo (+ (* 7 n) (* 31 (kc k 0)) (* 961 (kc k (- n 1))) (* 29791 (kc k (quotient n 2)))
+                   (if (> n 1) (* 923521 (kc k (- n 2))) 0) (if (> n 2) (* 3 (kc k (- n 3))) 0))
+                *nb*))))
+(define (lset xs k v) (if (= k 0) (cons v (cdr xs)) (cons (car xs) (lset (cdr xs) (- k 1) v))))
+(define (t-ref node h divs)
+  (cond ((not node) (list)) ((null? divs) node) (else (t-ref (list-ref node (modulo (quotient h (car divs)) 8)) h (cdr divs)))))
+(define (t-set node h divs b)
+  (if (null? divs) b
+      (let* ((n (if node node empty-node)) (k (modulo (quotient h (car divs)) 8)))
+        (lset n k (t-set (list-ref n k) h (cdr divs) b)))))
+(define st-empty (list 0 #f (list) (list) (list)))
+(define (st-count s) (car s))
+(define (st-cats s) (caddr s))
+(define (st-bucket s h) (t-ref (cadr s) h *divs*))
+(define (st-cx s) (list-ref s 4))
+(define (st-with-cx s cx) (list (car s) (cadr s) (caddr s) (list-ref s 3) cx))
+;; chg = the item changes this bucket write makes: (old . new) pairs, old #f = added, new #f = removed. Callers know
+;; them, so the per-category index never diffs buckets (O(bucket^2) + a 12-field equal? per untouched item).
+(define (st-put s h b delta cat chg)
+  (let* ((cx (cx-apply (st-cx s) chg)) (due *cx-due*))
+    ((lambda (s2) (if due (cx-maintain s2 (chg-cats chg)) s2))
+     (list (+ (st-count s) delta) (t-set (cadr s) h *divs* b)
+           (if (or (not cat) (member cat (st-cats s))) (st-cats s) (cons cat (st-cats s)))
+           (list)        ;; (was occ: a list of non-empty buckets; removing a bucket from it was O(store) per drop)
+           cx))))
+
+;; ---- per-category index (part of the store value, so checkpoints / forked worldlines carry it for free)
+;; Removes the O(store) passes from the live path: the ttl sweep, the size check's dead-item count and STATS.
+;; rec = (cnt tq young F dead rebuild?) per category:
+;;   cnt    items in the category
+;;   tq     expiry queue of entries (last id key) in nondecreasing `last` order. An entry is pushed whenever an
+;;          item is added or its `last` moves (always to the current ts, so pushes stay ordered); entries whose item
+;;          is gone or has moved are stale and skipped (lazy deletion). A sweep pops only expired entries.
+;;   young  the same for never-retrieved unpinned short-term items ("dead" candidates) not yet older than F
+;;   F/dead dead = #items with (unpinned, st, 0 hits, last <= F). The size check advances F to now-61 by popping
+;;          young, so its count is amortised O(1); every item update adjusts dead by the before/after difference.
+;; A queue longer than 2*cnt+64 is compacted to its live entries. UNPIN (the only update that makes an item
+;; expirable again without moving `last`) rebuilds its category from the store: O(store), white-box op only.
+;; Both queues are lazy (#f = not built): tq is built from the store the first time a sweep needs it (a ttl first
+;; applies to the category), young at the first size check. Until then a write only bumps cnt, so a store without
+;; ttls or learning carries no queue entries: every live object makes Aura's allocation slower (aura#4474).
+(define q-empty (list (list) (list) 0))
+(define (q-len q) (if q (caddr q) 0))
+(define (q-push q e) (if q (list (car q) (cons e (cadr q)) (+ 1 (caddr q))) #f))
+(define (q-norm q) (if (null? (car q)) (list (reverse (cadr q)) (list) (caddr q)) q))
+(define (q-drop1 q) (q-norm (list (cdr (car q)) (cadr q) (- (caddr q) 1))))   ;; q normalised, non-empty
+(define (q-filter p q) (let ((k (filter p (append (car q) (reverse (cadr q)))))) (list k (list) (length k))))
+(define (q-of-sorted es) (list es (list) (length es)))
+(define rec-empty (list 0 #f #f -1 0 #f))
+(define (rec-cnt r) (car r)) (define (rec-tq r) (cadr r)) (define (rec-young r) (caddr r))
+(define (rec-f r) (list-ref r 3)) (define (rec-dead r) (list-ref r 4)) (define (rec-rb r) (list-ref r 5))
+;; cx is a short alist (one entry per category); std assoc is an interpreted loop too, so walk it by hand
+(define (cx-get cx c) (cond ((null? cx) rec-empty) ((equal? (car (car cx)) c) (cdr (car cx))) (else (cx-get (cdr cx) c))))
+(define (cat-count s c) (rec-cnt (cx-get (st-cx s) c)))
+(define (it-young i) (and (not (it-pinned i)) (equal? (it-tier i) "st") (= 0 (it-hits i))))
+(define (counted? i f) (and (it-young i) (<= (it-last i) f)))
+(define (ent i) (list (it-last i) (it-id i) (it-key i)))
+(define (find-id xs id) (if (null? xs) #f (if (= (it-id (car xs)) id) (car xs) (find-id (cdr xs) id))))
+(define (ent-item s e) (find-id (st-bucket s (key-hash (caddr e))) (cadr e)))
+(define (ent-live s e) (let ((i (ent-item s e))) (if (and i (= (it-last i) (car e))) i #f)))
+(define (rec-tracked? r) (or (rec-tq r) (rec-young r)))
+;; Updates allocate as little as possible: Aura re-marks the whole live heap every <= 32768 allocations
+;; (aura#4474), so every cell an O(1) bookkeeping step allocates costs O(store) amortised. Untracked categories
+;; (no queue built yet) only replace the count cell; an unchanged rec is returned as #f (rec-chg).
+(define (rec-add r i)
+  (if (not (rec-tracked? r)) (cons (+ 1 (rec-cnt r)) (cdr r))
+  (let ((f (rec-f r)))
+    (list (+ 1 (rec-cnt r)) (q-push (rec-tq r) (ent i))
+          (if (and (rec-young r) (it-young i) (> (it-last i) f)) (q-push (rec-young r) (ent i)) (rec-young r))
+          f (if (counted? i f) (+ 1 (rec-dead r)) (rec-dead r)) (rec-rb r)))))
+(define (rec-del r i)
+  (if (or (not (rec-tracked? r)) (not (counted? i (rec-f r)))) (cons (- (rec-cnt r) 1) (cdr r))
+      (list (- (rec-cnt r) 1) (rec-tq r) (rec-young r) (rec-f r) (- (rec-dead r) 1) (rec-rb r))))
+(define (rec-chg r o n)
+  (if (not (rec-tracked? r)) #f
+  (let ((f (rec-f r)) (moved (not (= (it-last o) (it-last n)))))
+    (list (rec-cnt r)
+          (if moved (q-push (rec-tq r) (ent n)) (rec-tq r))
+          (if (and moved (rec-young r) (it-young n) (> (it-last n) f)) (q-push (rec-young r) (ent n)) (rec-young r))
+          f
+          (+ (rec-dead r) (if (counted? n f) 1 0) (if (counted? o f) -1 0))
+          (or (rec-rb r) (and (it-pinned o) (not (it-pinned n))))))))
+(define (fold-l f acc xs) (if (null? xs) acc (fold-l f (f (car xs) acc) (cdr xs))))
+;; cx-apply -> new cx; sets *cx-due* when a touched category must be rebuilt or has a queue over its compaction
+;; limit. Plain recursion, no closures (allocation, see above).
+(define (rec-due? r) (or (rec-rb r) (let ((lim (+ 64 (* 2 (rec-cnt r))))) (or (> (q-len (rec-tq r)) lim) (> (q-len (rec-young r)) lim)))))
+(define *cx-due* #f)
+(define (cx-repl cx c r)
+  (cond ((null? cx) (list (cons c r)))
+        ((equal? (car (car cx)) c) (cons (cons c r) (cdr cx)))
+        (else (cons (car cx) (cx-repl (cdr cx) c r)))))
+(define (cx-set cx c r) (if (rec-due? r) (set! *cx-due* #t) #f) (cx-repl cx c r))
+(define (cx-chg cx chg)
+  (if (null? chg) cx
+      (let ((o (car (car chg))) (n (cdr (car chg))))
+        (cx-chg (cond ((not o) (cx-set cx (it-cat n) (rec-add (cx-get cx (it-cat n)) n)))
+                      ((not n) (cx-set cx (it-cat o) (rec-del (cx-get cx (it-cat o)) o)))
+                      (else (let ((r2 (rec-chg (cx-get cx (it-cat n)) o n))) (if r2 (cx-set cx (it-cat n) r2) cx))))
+                (cdr chg)))))
+(define (cx-apply cx chg) (set! *cx-due* #f) (cx-chg cx chg))
+;; many drops at once (bulk expiry): one rec update per category instead of one per item. rec-del only lowers cnt
+;; (and dead for counted items), so the result is the same rec; a queue can only become due as cnt falls, so checking
+;; the final rec sets *cx-due* exactly when the per-item loop would have.
+(define (cx-pos cx c k) (cond ((null? cx) -1) ((equal? (car (car cx)) c) k) (else (cx-pos (cdr cx) c (+ k 1)))))
+(define (cx-drop-many cx dropped)
+  (set! *cx-due* #f)
+  ;; tally into per-category vectors: no allocation per item (each cell costs O(heap) amortised here, aura#4474)
+  (let* ((n (length cx)) (kv (make-vector n 0)) (dv (make-vector n 0)))
+    (let tally ((ds dropped))
+      (if (pair? ds)
+          (let* ((i (car ds)) (j (cx-pos cx (it-cat i) 0)) (r (cdr (list-ref cx j))))
+            (vector-set! kv j (+ 1 (vector-ref kv j)))
+            (if (and (rec-tracked? r) (counted? i (rec-f r))) (vector-set! dv j (+ 1 (vector-ref dv j))) #f)
+            (tally (cdr ds)))
+          #f))
+    (let app ((cs (map car cx)) (j 0) (cx cx))
+      (if (null? cs) cx
+          (let ((k (vector-ref kv j)) (kd (vector-ref dv j)))
+            (if (= k 0) (app (cdr cs) (+ j 1) cx)
+                (let* ((c (car cs)) (r (cx-get cx c))
+                       (r2 (if (= kd 0) (cons (- (rec-cnt r) k) (cdr r))
+                               (list (- (rec-cnt r) k) (rec-tq r) (rec-young r) (rec-f r) (- (rec-dead r) kd) (rec-rb r)))))
+                  (app (cdr cs) (+ j 1) (cx-set cx c r2)))))))))
+(define (chg-cats chg)
+  (fold-l (lambda (p acc) (let ((c (it-cat (if (car p) (car p) (cdr p))))) (if (member c acc) acc (cons c acc)))) (list) chg))
+(define (adds xs) (map (lambda (x) (cons #f x)) xs))
+(define (dels xs) (map (lambda (x) (cons x #f)) xs))
+(define (cat-items s c) (st-fold (lambda (i acc) (if (equal? (it-cat i) c) (cons i acc) acc)) (list) s))
+(define (by-last ys) (sort (map ent ys) (lambda (a b) (< (car a) (car b)))))
+(define (build-tq xs) (q-of-sorted (by-last (filter (lambda (i) (equal? (it-tier i) "st")) xs))))
+(define (build-young xs f) (q-of-sorted (by-last (filter (lambda (i) (and (it-young i) (> (it-last i) f))) xs))))
+;; rebuild whatever is built (after UNPIN)
+(define (rec-rebuild s c r)
+  (let ((xs (cat-items s c)) (f (rec-f r)))
+    (list (length xs) (if (rec-tq r) (build-tq xs) #f) (if (rec-young r) (build-young xs f) #f) f
+          (if (rec-young r) (length (filter (lambda (i) (counted? i f)) xs)) 0) #f)))
+(define (rec-compact s r)
+  (let* ((lim (+ 64 (* 2 (rec-cnt r)))) (f (rec-f r))
+         (ct (> (q-len (rec-tq r)) lim)) (cy (> (q-len (rec-young r)) lim)))
+    (if (not (or ct cy)) #f
+        (list (rec-cnt r)
+              (if ct (q-filter (lambda (e) (ent-live s e)) (rec-tq r)) (rec-tq r))
+              (if cy (q-filter (lambda (e) (let ((i (ent-live s e))) (and i (it-young i) (> (car e) f)))) (rec-young r))
+                  (rec-young r))
+              f (rec-dead r) #f))))
+(define (cx-maintain s cs)
+  (if (null? cs) s
+      (let* ((c (car cs)) (r (cx-get (st-cx s) c))
+             (r2 (if (rec-rb r) (rec-rebuild s c r) (rec-compact s r))))
+        (cx-maintain (if r2 (st-set-rec s c r2) s) (cdr cs)))))
+(define (st-set-rec s c r) (st-with-cx s (cx-repl (st-cx s) c r)))
+(define (st-key s key) (with-key (st-bucket s (key-hash key)) key))
+;; fold f over every item by walking the trie (empty subtrees are #f, empty buckets '()): O(4096 + items).
+;; st->list restores the old global order (newest id first). A list of occupied buckets used to drive this, but
+;; dropping a bucket from it was O(store), which made a sweep that expires most of a big store O(n^2).
+(define (st-fold f acc s)
+  (let walk ((node (cadr s)) (depth 0) (acc acc))
+    (cond ((not node) acc)
+          ((= depth 4) (let bl ((xs node) (acc acc)) (if (null? xs) acc (bl (cdr xs) (f (car xs) acc)))))
+          (else (let kl ((ks node) (acc acc)) (if (null? ks) acc (kl (cdr ks) (walk (car ks) (+ depth 1) acc))))))))
+(define (by-id-desc xs) (sort xs (lambda (a b) (> (it-id a) (it-id b)))))
+(define (st->list s) (by-id-desc (st-fold cons (list) s)))
+(define (st-filter pred s) (by-id-desc (st-fold (lambda (i acc) (if (pred i) (cons i acc) acc)) (list) s)))
+(define (st-count-if pred s) (st-fold (lambda (i n) (if (pred i) (+ n 1) n)) 0 s))
+;; replace / drop one item (located by its key bucket)
+(define (st-replace s new)
+  (let* ((h (key-hash (it-key new))) (b (st-bucket s h)) (old (find-id b (it-id new))))
+    (st-put s h (replace-item b new) 0 #f (if old (list (cons old new)) (list)))))
+(define (st-drop s it)
+  (let* ((h (key-hash (it-key it))) (b (st-bucket s h)) (old (find-id b (it-id it))))
+    (st-put s h (filter (lambda (i) (not (equal? (it-id i) (it-id it)))) b) -1 #f (if old (list (cons old #f)) (list)))))
+(define (st-find-id s id) (let ((r (st-filter (lambda (i) (equal? (it-id i) id)) s))) (if (null? r) #f (car r))))
+
+;; ---------------------------------------------------------------- store transitions (pure; shared by live + replay)
+;; write -> (list items outcome id)
+(define (store-write st key val cat src ts pver)
+  (let* ((h (key-hash key)) (b (st-bucket st h)) (ex (with-key b key)) (nx (length ex)))
+    (if (equal? src "correction")
+        (let ((it (mk ts key val cat src ts ts 0 "st" (any-pinned ex) pver "correction")))
+          (if (equal? (p-resolve cat) "keep-both")
+              (list (st-put st h (cons it b) 1 cat (adds (list it))) "corrected" ts)
+              (list (st-put st h (cons it (without-key b key)) (- 1 nx) cat (cons (cons #f it) (dels ex))) "corrected" ts)))
+        (if (not (p-admit cat src))
+            (list st "rejected" -1)
+            (if (null? ex)
+                (let ((it (mk ts key val cat src ts ts 0 "st" #f pver "admit")))
+                  (list (st-put st h (cons it b) 1 cat (adds (list it))) "added" ts))
+                (if (and (any-pinned ex) (not (equal? src "user")))
+                    (list st "lost-pinned" -1)
+                    (let ((same (find-val ex val)))
+                      (if same
+                          (let ((nw (it-set same 6 ts)))
+                            (list (st-put st h (replace-item b nw) 0 #f (list (cons same nw))) "dup" (it-id same)))
+                          (let ((r (p-resolve cat)))
+                            (cond ((equal? r "keep-first") (list st "lost-conflict" -1))
+                                  ((equal? r "keep-both")
+                                   (let ((it (mk ts key val cat src ts ts 0 "st" #f pver "admit")))
+                                     (list (st-put st h (cons it b) 1 cat (adds (list it))) "added" ts)))
+                                  (else
+                                   (let ((it (mk ts key val cat src ts ts 0 "st" (any-pinned ex) pver "admit")))
+                                     (list (st-put st h (cons it (without-key b key)) (- 1 nx) cat (cons (cons #f it) (dels ex)))
+                                           "replaced" ts)))))))))))))
+
+(define (rank-score i) (+ (it-ts i) (* 20 (p-weight (it-src i)))))
+(define (best-of xs)
+  (let loop ((xs (cdr xs)) (b (car xs)))
+    (if (null? xs) b (loop (cdr xs) (if (> (rank-score (car xs)) (rank-score b)) (car xs) b)))))
+;; query -> (list items answer id)
+(define (store-query st key cat now)
+  (let ((ex (st-key st key)))
+    (if (null? ex)
+        (list st "" -1)
+        (let* ((b (best-of ex))
+               (h (+ 1 (it-hits b)))
+               (nb (it-hit b h now (if (>= h (p-promote (it-cat b))) "lt" (it-tier b)))))
+          (list (st-replace st nb) (it-val b) (it-id b))))))
+(define (keep-item? i now)
+  (or (it-pinned i) (equal? (it-tier i) "lt")
+      (let ((t (p-ttl (it-cat i)))) (or (= t 0) (<= (- now (it-last i)) t)))))
+;; sweep -> (list kept dropped).  Fast path: no stored category has a ttl, so nothing can expire (the common case;
+;; the full sweep is O(store) and ran every *sweep-every* events).  Otherwise rebuild only the buckets that drop items.
+(define (any-ttl? cs) (if (null? cs) #f (if (> (p-ttl (car cs)) 0) #t (any-ttl? (cdr cs)))))
+;; Bulk expiry (a new ttl that expires most of the store, typically in a gate trial): one trie pass keeping
+;; keep-item? items, O(4096 + n), instead of one 4-node path copy per dropped item.
+(define (t-keep node depth keep?)
+  (cond ((not node) #f)
+        ((= depth 4) (filter keep? node))
+        (else (map (lambda (ch) (t-keep ch (+ depth 1) keep?)) node))))
+(define (st-bulk-drop s dropped now)
+  (let* ((cx (cx-drop-many (st-cx s) dropped)) (due *cx-due*)
+         (s2 (list (- (st-count s) (length dropped)) (t-keep (cadr s) 0 (lambda (i) (keep-item? i now))) (st-cats s) (list) cx)))
+    (if due (cx-maintain s2 (chg-cats (dels dropped))) s2)))
+;; With a ttl: pop each ttl'd category's expiry queue up to now-ttl-1 (O(expired + stale)); same items, same
+;; (newest-id-first) order as the old full filter with keep-item?.
+(define (expired? i lim) (and (<= (it-last i) lim) (not (it-pinned i)) (equal? (it-tier i) "st")))
+(define (sweep-cat s c lim)   ;; -> (list store expired-items)
+  (let ((r (cx-get (st-cx s) c)))
+    (if (not (rec-tq r))
+        ;; first sweep under a ttl (live, or a gate trial replaying from a checkpoint): one pass over the category,
+        ;; and the expiry queue is built from the survivors only (no sorting / popping entries that are dropped now)
+        ;; one trie walk splitting the category into expired / kept (same order as cat-items + two filters, but
+        ;; one cons per item instead of three: allocation is the cost at this size, aura#4474)
+        (let ((ex (list)) (kept (list)))
+          (st-fold (lambda (i acc) (if (equal? (it-cat i) c) (if (expired? i lim) (set! ex (cons i ex)) (set! kept (cons i kept))) #f) acc) #f s)
+          (list (st-set-rec s c (list (rec-cnt r) (build-tq kept) (rec-young r) (rec-f r) (rec-dead r) (rec-rb r)))
+                ex))
+        (let loop ((q (q-norm (rec-tq r))) (acc (list)))
+          (if (or (= 0 (q-len q)) (> (car (car (car q))) lim))
+              (list (st-set-rec s c (list (rec-cnt r) q (rec-young r) (rec-f r) (rec-dead r) (rec-rb r))) acc)
+              (let ((i (ent-live s (car (car q)))))
+                (loop (q-drop1 q) (if (and i (not (it-pinned i)) (equal? (it-tier i) "st")) (cons i acc) acc))))))))
+(define (store-sweep st now)
+  (if (not (any-ttl? (st-cats st)))
+      (list st (list))
+      (let loop ((cs (map car (st-cx st))) (s st) (acc (list)))
+        (if (null? cs)
+            ;; newest-id-first only orders the per-item decay records (live-event!); the store does not depend on it.
+            ;; A gate replay logs nothing, and a batched decay orders each key's items when they are read
+            ;; (batch-key-items), so both skip this O(n log n) interpreted sort
+            (let ((dropped (if (or *replaying* (decay-batched? (length acc))) acc (by-id-desc acc))))
+              (list (if (> (* 8 (length dropped)) (st-count s))
+                        (st-bulk-drop s dropped now)
+                        (let dl ((s s) (ds dropped)) (if (null? ds) s (dl (st-drop s (car ds)) (cdr ds)))))
+                    dropped))
+            (let ((t (p-ttl (car cs))))
+              (if (> t 0)
+                  (let ((r (sweep-cat s (car cs) (- now t 1)))) (loop (cdr cs) (car r) (append (cadr r) acc)))
+                  (loop (cdr cs) s acc)))))))
+(define (store-pin st key flag)
+  (let ((h (key-hash key)))
+    (let* ((b (st-bucket st h)) (chg (map (lambda (i) (cons i (it-set i 9 flag))) (with-key b key))))
+      (st-put st h (map (lambda (i) (if (equal? (it-key i) key) (it-set i 9 flag) i)) b) 0 #f chg))))
+
+;; one stream event -> (list items outcome id answer dropped)
+;; ev = (ts kind key val cat src label)
+(define (ev-ts e) (list-ref e 0)) (define (ev-kind e) (list-ref e 1)) (define (ev-key e) (list-ref e 2))
+(define (ev-val e) (list-ref e 3)) (define (ev-cat e) (list-ref e 4)) (define (ev-src e) (list-ref e 5))
+(define (ev-label e) (list-ref e 6))
+(define (apply-ev items ev pver)
+  (let* ((ts (ev-ts ev))
+         (sw (if (= 0 (modulo ts *sweep-every*)) (store-sweep items ts) (list items (list))))
+         (items (car sw)) (dropped (cadr sw)) (kind (ev-kind ev)))
+    (cond ((equal? kind "QUERY")
+           (let ((r (store-query items (ev-key ev) (ev-cat ev) ts))) (list (car r) "query" (caddr r) (cadr r) dropped)))
+          ((equal? kind "PIN") (list (store-pin items (ev-key ev) #t) "pinned" -1 "" dropped))
+          ((equal? kind "CORRECT")
+           (let ((r (store-write items (ev-key ev) (ev-val ev) (ev-cat ev) "correction" ts pver)))
+             (list (car r) (cadr r) (caddr r) "" dropped)))
+          (else
+           (let ((r (store-write items (ev-key ev) (ev-val ev) (ev-cat ev) (ev-src ev) ts pver)))
+             (list (car r) (cadr r) (caddr r) "" dropped))))))
+
+;; ---------------------------------------------------------------- live state
+(define *items* st-empty)    ;; store index (see above)
+(define *events* (list))      ;; newest first
+(define *obs* (list))         ;; newest first: (ts key val cat src outcome id)
+(define *prov* (list))        ;; newest first: (ts op id key val actor pver detail)
+(define *ckpts* (list))       ;; newest first: (ts items)
+(define *version* 0)
+(define *vlog* (list))        ;; newest first, hashes
+(define *learn* #t)
+(define *pending* #f)         ;; (list cands why sig evidence)
+(define *evidence* (hash))
+(define *blacklist* (hash))
+(define *seed-snap* -1)
+(define *dead-flag* (hash))
+
+;; per-key index of the observation / provenance logs: diagnose and GET only ever look at one key's history, so
+;; they cost O(that history), not O(log). The logs are live-only state (never forked by a trial), so the index is
+;; a mutable 4096-slot vector of buckets ((key . entries newest first) ...): vector-set! is ~12 us, against ~0.25 ms
+;; for a path-copying trie insert. (A lazily caught-up trie made the first GET after 20k writes cost 11 s.)
+(define (ix-cons b key x)
+  (cond ((null? b) (list (cons key (list x))))
+        ((equal? (car (car b)) key) (cons (cons key (cons x (cdr (car b)))) (cdr b)))
+        (else (cons (car b) (ix-cons (cdr b) key x)))))
+(define (ix-find b key) (cond ((null? b) (list)) ((equal? (car (car b)) key) (cdr (car b))) (else (ix-find (cdr b) key))))
+(define (ix-add! v key x) (let ((h (key-hash key))) (vector-set! v h (ix-cons (vector-ref v h) key x))))
+(define (ix-get v key) (ix-find (vector-ref v (key-hash key)) key))
+(define *obs-ix* (make-vector *nb* (list)))
+(define *prov-ix* (make-vector *nb* (list)))
+(define (obs! o) (set! *obs* (cons o *obs*)) (ix-add! *obs-ix* (list-ref o 1) o))
+;; Decay batches. A sweep that expires >= *decay-batch-min* items (a newly kept ttl on a big store) logs one batch
+;; instead of an observation + a provenance record (+ 2 index inserts) per item: at 20k items that per-item logging
+;; took 16.6 s, because Aura's allocation cost grows with the live heap (aura#4474). The per-key views below
+;; re-create the same records in the same order, so GET / diagnose / STATS replies are unchanged.
+;; batch = (ts policy-version ((cat . "ttl N") ...) key-buckets count). A batch is the first thing logged at its ts
+;; (live-event! logs decay before the event's own records; white-box ops log at the ts of the last event), so in a
+;; newest-first per-key list its records go after every record with ts >= the batch ts.
+(define *batches* (list))     ;; newest first
+(define (decay-batched? n) (and (> *decay-batch-min* 0) (>= n *decay-batch-min*)))
+(define (batches-n) (let loop ((bs *batches*) (n 0)) (if (null? bs) n (loop (cdr bs) (+ n (list-ref (car bs) 4))))))
+(define (cat-details ds acc)
+  (cond ((null? ds) acc)
+        ((assoc (it-cat (car ds)) acc) (cat-details (cdr ds) acc))
+        (else (cat-details (cdr ds) (cons (cons (it-cat (car ds)) (string-append "ttl " (n->s (p-ttl (it-cat (car ds)))))) acc)))))
+(define (decay-batch! ts dropped)
+  (let ((v (make-vector *nb* (list))))
+    (for-each (lambda (d) (let ((h (key-hash (it-key d)))) (vector-set! v h (cons d (vector-ref v h))))) dropped)
+    (set! *batches* (cons (list ts *version* (cat-details dropped (list)) v (length dropped)) *batches*))))
+;; per-item logging walked the dropped items newest-id-first, so a key's newest record is its oldest id
+(define (batch-key-items b key)
+  (sort (filter (lambda (i) (equal? (it-key i) key)) (vector-ref (list-ref b 3) (key-hash key))) (lambda (a c) (< (it-id a) (it-id c)))))
+(define (b-obs b i) (list (car b) (it-key i) (it-val i) (it-cat i) (it-src i) "decayed" (it-id i)))
+(define (b-prov b i) (list (car b) "decay" (it-id i) (it-key i) (it-val i) "policy" (cadr b) (cdr (assoc (it-cat i) (caddr b)))))
+(define (append-rev xs acc) (if (null? xs) acc (append-rev (cdr xs) (cons (car xs) acc))))
+(define (with-batches xs key mk)    ;; xs: a per-key index list, newest first
+  (if (null? *batches*) xs
+      (let loop ((xs xs) (bs *batches*) (acc (list)))
+        (cond ((and (pair? bs) (or (null? xs) (< (car (car xs)) (car (car bs)))))
+               (loop xs (cdr bs) (append-rev (map (lambda (i) (mk (car bs) i)) (batch-key-items (car bs) key)) acc)))
+              ((null? xs) (reverse acc))
+              (else (loop (cdr xs) bs (cons (car xs) acc)))))))
+(define (obs-of key) (with-batches (ix-get *obs-ix* key) key b-obs))
+(define (prov-of key) (with-batches (ix-get *prov-ix* key) key b-prov))
+(define (prov! op id key val actor detail)
+  (let ((p (list (if (null? *events*) 0 (ev-ts (car *events*))) op id key val actor *version* detail)))
+    (set! *prov* (cons p *prov*))
+    (ix-add! *prov-ix* key p)))
+(define (prov->hash p)
+  (hash "ts" (list-ref p 0) "op" (list-ref p 1) "id" (list-ref p 2) "key" (list-ref p 3) "val" (list-ref p 4)
+        "actor" (list-ref p 5) "policy_version" (list-ref p 6) "detail" (list-ref p 7)))
+(define (obs->hash o)
+  (hash "ts" (list-ref o 0) "key" (list-ref o 1) "val" (list-ref o 2) "cat" (list-ref o 3) "src" (list-ref o 4)
+        "outcome" (list-ref o 5) "id" (list-ref o 6)))
+
+;; ---------------------------------------------------------------- learner
+(define (cand->str c) (join-map (lambda (x) (if (string? x) x (n->s x))) c "\t"))
+(define (tbl-ref tbl k dflt) (let ((e (assoc k tbl))) (if e (cdr e) dflt)))
+(define cats (list "pref" "fact" "project" "episodic"))
+(define srcs (list "user" "assistant" "chatter" "teammate"))
+;; fix space for the noise ablation (a mis-attributed diagnosis maps deterministically to one of these)
+(define fix-space
+  (append (apply append (map (lambda (c) (map (lambda (s) (list "admit" c s "flip")) srcs)) cats))
+          (apply append (map (lambda (c) (list (list "resolve" c "latest") (list "resolve" c "keep-first") (list "resolve" c "keep-both"))) cats))
+          (map (lambda (c) (list "ttl" c 30)) cats)
+          (map (lambda (c) (list "promote" c 1)) cats)))
+(define (str-hash s) (apply + (map char->integer (string->list s))))
+(define (resolve-flip c)
+  (if (and (equal? (car c) "admit") (equal? (list-ref c 3) "flip"))
+      (list "admit" (list-ref c 1) (list-ref c 2) (if (p-admit (list-ref c 1) (list-ref c 2)) "0" "1"))
+      c))
+
+(define (find-obs-in xs pred)
+  (let loop ((xs xs)) (if (null? xs) #f (if (pred (car xs)) (car xs) (loop (cdr xs))))))
+
+;; diagnose a correction: why did memory not hold `val` for `key`?  -> (list why cands)
+(define (diagnose key val cat ts)
+  (let* ((kobs (obs-of key))
+         (find-obs (lambda (pred) (find-obs-in kobs pred)))
+         (o (find-obs (lambda (o) (and (equal? (list-ref o 1) key) (equal? (list-ref o 2) val) (< (list-ref o 0) ts)
+                                       (not (equal? (list-ref o 5) "decayed")))))))
+    (if (not o)
+        (list "unseen" (list))
+        (let ((out (list-ref o 5)) (src (list-ref o 4)) (id (list-ref o 6)))
+          (cond
+            ((equal? out "rejected") (list "rejected" (list (list "admit" cat src "1"))))
+            ((equal? out "lost-conflict")
+             (list "lost-conflict" (list (list "resolve" cat "latest") (list "resolve" cat "keep-both"))))
+            ((equal? out "lost-pinned") (list "pinned" (list)))
+            (else
+             (let ((dec (find-obs (lambda (d) (and (equal? (list-ref d 5) "decayed") (equal? (list-ref d 6) id))))))
+               (if dec
+                   (let ((t (p-ttl cat)) (p (p-promote cat)))
+                     (list "decayed" (append (list (list "ttl" cat (* 2 t)))
+                                             (if (> p 1) (list (list "promote" cat (- p 1))) (list)))))
+                   (let ((rep (find-obs (lambda (r) (and (equal? (list-ref r 1) key) (> (list-ref r 0) (list-ref o 0))
+                                                         (or (equal? (list-ref r 5) "replaced") (equal? (list-ref r 5) "added"))
+                                                         (not (equal? (list-ref r 2) val)))))))
+                     (if (and rep (not (equal? (list-ref rep 4) "user")) (not (equal? (list-ref rep 4) "correction")))
+                         (list "overwritten" (list (list "admit" cat (list-ref rep 4) "0")))
+                         (if (equal? (p-resolve cat) "keep-both")
+                             (list "outranked" (list (list "resolve" cat "latest")))
+                             (list "unexplained" (list)))))))))))))
+
+;; a candidate that would not change the current policy is not a proposal
+(define (noop-cand? c)
+  (let ((kind (car c)) (cat (cadr c)))
+    (cond ((equal? kind "admit") (and (not (equal? (list-ref c 3) "flip")) (eq? (p-admit cat (caddr c)) (equal? (list-ref c 3) "1"))))
+          ((equal? kind "resolve") (equal? (p-resolve cat) (caddr c)))
+          ((equal? kind "ttl") (= (p-ttl cat) (caddr c)))
+          ((equal? kind "promote") (= (p-promote cat) (caddr c)))
+          (else #t))))
+(define (live-cands cs) (filter (lambda (c) (not (noop-cand? c))) cs))
+(define (allowed? sig n) (let ((at (hash-ref *blacklist* sig 0))) (or (= at 0) (>= n (* 2 at)))))
+(define (consider! why cands0)
+  (let ((cands (live-cands cands0)))
+    (if (or (not *learn*) *pending* (null? cands))
+        #f
+        (let* ((sig (cand->str (car cands)))
+               (n (+ 1 (hash-ref *evidence* sig 0))))
+          (hash-set! *evidence* sig n)
+          (if (and (>= n *min-evidence*) (allowed? sig n))
+              (begin (set! *pending* (list cands why sig n)) #t)
+              #f)))))
+
+;; size pressure: categories with many never-retrieved, untouched, unpinned short-term items
+;; #items of cat with (unpinned, st, 0 hits, now-last > *dead-age*): advance the category's F to now-61 by popping
+;; its young queue (amortised O(1)); see the per-category index.
+(define (advance-dead s c lim)
+  (let ((r (cx-get (st-cx s) c)))
+    (cond
+      ((not (rec-young r))      ;; first size check for c: count directly and start tracking from F = lim
+       (let ((xs (cat-items s c)))
+         (st-set-rec s c (list (rec-cnt r) (rec-tq r) (build-young xs lim) lim
+                               (length (filter (lambda (i) (counted? i lim)) xs)) (rec-rb r)))))
+      ((<= lim (rec-f r)) s)
+      (else
+        (let loop ((q (q-norm (rec-young r))) (d (rec-dead r)))
+          (if (or (= 0 (q-len q)) (> (car (car (car q))) lim))
+              (st-set-rec s c (list (rec-cnt r) (rec-tq r) q lim d (rec-rb r)))
+              (let ((i (ent-live s (car (car q)))))
+                (loop (q-drop1 q) (if (and i (it-young i)) (+ d 1) d)))))))))
+(define (dead-count cat now)
+  (set! *items* (advance-dead *items* cat (- now *dead-age* 1)))
+  (rec-dead (cx-get (st-cx *items*) cat)))
+(define (size-check! now)
+  (let loop ((cs cats))
+    (if (or (null? cs) *pending* (not *learn*)) #f
+        (let* ((c (car cs)) (n (dead-count c now)) (sig (string-append "ttl\t" c)))
+          (if (and (>= n *dead-min*) (= 0 (p-ttl c)) (allowed? sig n))
+              (begin (set! *pending* (list (list (list "ttl" c *dead-age*) (list "ttl" c (* 2 *dead-age*)))
+                                           (string-append "size: " (n->s n) " dead items in " c) sig n))
+                     #t)
+              (loop (cdr cs)))))))
+
+;; ---------------------------------------------------------------- applying / undoing candidates
+(define (rebind! name body why)
+  (let ((r (try (mutate:rebind name body why) (catch (e) (list "error" e)))))
+    (eq? r #t)))
+(define (apply-cand! c)
+  (let* ((c (resolve-flip c)) (kind (car c)) (cat (cadr c)) (why (cand->str c)))
+    (let ((ok (cond ((equal? kind "admit")
+                     (set! *admit-table* (assoc-set *admit-table* (string-append cat "\t" (caddr c)) (equal? (list-ref c 3) "1")))
+                     (rebind! "admit" (compile-admit) why))
+                    ((equal? kind "resolve")
+                     (set! *resolve-table* (assoc-set *resolve-table* cat (caddr c)))
+                     (rebind! "resolve" (compile-resolve) why))
+                    ((equal? kind "ttl")
+                     (set! *ttl-table* (assoc-set *ttl-table* cat (caddr c)))
+                     (rebind! "ttl" (compile-ttl) why))
+                    ((equal? kind "promote")
+                     (set! *promote-table* (assoc-set *promote-table* cat (caddr c)))
+                     (rebind! "promote-at" (compile-promote) why))
+                    (else #f))))
+      (let ((ev (try (begin (eval-current) #t) (catch (e) #f))))
+        (pc-clear!)
+        (and ok ev)))))
+(define (tables) (list *admit-table* *resolve-table* *ttl-table* *promote-table*))
+(define (set-tables! t)
+  (set! *admit-table* (list-ref t 0)) (set! *resolve-table* (list-ref t 1))
+  (set! *ttl-table* (list-ref t 2)) (set! *promote-table* (list-ref t 3)))
+
+;; ---------------------------------------------------------------- gate: replay the window in forked worldlines
+(define (pick-ckpt now)
+  (let loop ((cs *ckpts*) (last #f))
+    (if (null? cs) last
+        (if (<= (car (car cs)) (- now *window*)) (car cs) (loop (cdr cs) (car cs))))))
+(define (window-events from)
+  (let loop ((es *events*) (acc (list)))
+    (if (or (null? es) (< (ev-ts (car es)) from)) acc (loop (cdr es) (cons (car es) acc)))))
+;; -> (list correct labeled size replayed pruned?).  User corrections are labels, not inputs: the counterfactual
+;; worldline has to keep memory right on its own, so CORRECT events are skipped (their value already labels the query
+;; they answer). rems[k] = labeled queries in evs[k..]; need = correct count to reach (-1: never stop early).
+(define (labeled-ev? e) (and (equal? (ev-kind e) "QUERY") (not (equal? (ev-label e) ""))))
+(define (rem-labeled evs)
+  (let loop ((es (reverse evs)) (k 0) (acc (list)))
+    (if (null? es) acc
+        (let ((k2 (if (labeled-ev? (car es)) (+ k 1) k))) (loop (cdr es) k2 (cons k2 acc))))))
+(define *replaying* #f)
+(define (replay-bounded items evs rems need)
+  (set! *replaying* #t)
+  (let ((r (replay-loop items evs rems need))) (set! *replaying* #f) r))
+(define (replay-loop items evs rems need)
+  (let loop ((items items) (evs evs) (rems rems) (ok 0) (n 0) (m 0))
+    (cond ((null? evs) (list ok n (st-count items) m #f))
+          ((< (+ ok (car rems)) need) (list ok n -1 m #t))
+          (else
+           (let* ((e (car evs))
+                  (r (if (equal? (ev-kind e) "CORRECT") (list items "skip" -1 "" (list)) (apply-ev items e *version*))))
+             (if (labeled-ev? e)
+                 (loop (car r) (cdr evs) (cdr rems) (if (equal? (list-ref r 3) (ev-label e)) (+ ok 1) ok) (+ n 1) (+ m 1))
+                 (loop (car r) (cdr evs) (cdr rems) ok n (+ m 1))))))))
+(define (replay items evs) (replay-bounded items evs (rem-labeled evs) -1))
+(define (score->hash s)
+  (if (and (> (length s) 4) (list-ref s 4))
+      (hash "correct" (car s) "labeled" (cadr s) "size" (caddr s) "pruned" #t "replayed" (list-ref s 3))
+      (hash "correct" (car s) "labeled" (cadr s) "size" (caddr s))))
+(define (better? s b)
+  (or (> (car s) (car b))
+      (and (= (car s) (car b)) (< (* 10 (caddr s)) (* 9 (caddr b))))))
+
+(define (log-version! kind cands chosen why scores window t0 snap)
+  (set! *vlog* (cons (hash "version" *version* "ts" (if (null? *events*) 0 (ev-ts (car *events*))) "verdict" kind
+                           "candidates" (map cand->str cands) "chosen" (if chosen (cand->str chosen) #f) "why" why
+                           "scores" scores "window" window "ms" (- (current-time-ms) t0) "snap" snap)
+                     *vlog*)))
+
+(define (gate!)
+  (let* ((p *pending*) (cands (list-ref p 0)) (why (list-ref p 1)) (sig (list-ref p 2)) (n (list-ref p 3))
+         (t0 (current-time-ms)) (now (if (null? *events*) 0 (ev-ts (car *events*))))
+         (ck (pick-ckpt now)) (cts (if ck (car ck) 0)) (citems (if ck (cadr ck) st-empty))
+         (evs (window-events cts))
+         (rems (rem-labeled evs))
+         (base (replay-bounded citems evs rems -1))
+         (t (tables))
+         (snap (ast:snapshot (string-append "gate-" (n->s now))))
+         ;; in order, against the best so far (the same chain the verdict loop below walks)
+         (scores (let loop ((cs cands) (best base) (acc (list)))
+                   (if (null? cs) (reverse acc)
+                       (let* ((ok (apply-cand! (car cs)))
+                              (s (if ok (replay-bounded citems evs rems (if *gate-prune* (car best) -1)) (list -1 0 0))))
+                         (ast:restore snap) (eval-current) (set-tables! t) (pc-clear!)
+                         (loop (cdr cs) (if (better? s best) s best) (cons s acc)))))))
+    (set! *pending* #f)
+    (let loop ((cs cands) (ss scores) (bc #f) (bs base))
+      (if (null? cs)
+          (let ((sh (cons (score->hash base) (map score->hash scores))))
+            (if bc
+                (begin (apply-cand! bc) (set! *version* (+ *version* 1))
+                       (log-version! "KEEP" cands (resolve-flip bc) why sh (list cts now) t0 snap)
+                       (prov! "policy" -1 "" (cand->str (resolve-flip bc)) "learner" why)
+                       (hash "verdict" "KEEP" "chosen" (cand->str (resolve-flip bc)) "scores" sh "version" *version*))
+                (begin (hash-set! *blacklist* sig n)
+                       (log-version! "ROLLBACK" cands #f why sh (list cts now) t0 snap)
+                       (hash "verdict" "ROLLBACK" "chosen" #f "scores" sh "version" *version*))))
+          (if (better? (car ss) bs) (loop (cdr cs) (cdr ss) (car cs) (car ss)) (loop (cdr cs) (cdr ss) bc bs))))))
+
+(define (apply-ungated!)
+  (let* ((p *pending*) (c (car (list-ref p 0))) (t0 (current-time-ms)))
+    (set! *pending* #f)
+    (apply-cand! c)
+    (set! *version* (+ *version* 1))
+    (log-version! "KEEP-UNGATED" (list-ref p 0) (resolve-flip c) (list-ref p 1) (list) (list) t0 -1)
+    (prov! "policy" -1 "" (cand->str (resolve-flip c)) "learner" (list-ref p 1))
+    (hash "verdict" "KEEP" "chosen" (cand->str (resolve-flip c)) "version" *version*)))
+
+;; ---------------------------------------------------------------- live event handling
+(define (pend->hash)
+  (if *pending* (hash "candidates" (map cand->str (list-ref *pending* 0)) "why" (list-ref *pending* 1)) #f))
+
+(define (live-event! kind key val cat src noise)
+  (let* ((ts (if (null? *events*) 0 (+ 1 (ev-ts (car *events*)))))
+         (ev (list ts kind key val cat src "")))
+    (if (= 0 (modulo ts *ck-every*))
+        (set! *ckpts* (let ((c (cons (list ts *items*) *ckpts*))) (if (> (length c) 12) (reverse (cdr (reverse c))) c)))
+        #f)
+    ;; a correction labels the query it answers (for replay scoring)
+    (if (and (equal? kind "CORRECT") (not (null? *events*)) (equal? (ev-kind (car *events*)) "QUERY")
+             (equal? (ev-key (car *events*)) key))
+        (set! *events* (cons (it-set (car *events*) 6 val) (cdr *events*)))
+        #f)
+    (let* ((r (apply-ev *items* ev *version*))
+           (out (list-ref r 1)) (id (list-ref r 2)) (ans (list-ref r 3)) (dropped (list-ref r 4)))
+      (set! *items* (car r))
+      (set! *events* (cons (if (equal? kind "QUERY") (it-set ev 6 ans) ev) *events*))
+      (if (decay-batched? (length dropped))
+          (decay-batch! ts dropped)
+          (map (lambda (d) (obs! (list ts (it-key d) (it-val d) (it-cat d) (it-src d) "decayed" (it-id d)))
+                           (prov! "decay" (it-id d) (it-key d) (it-val d) "policy" (string-append "ttl " (n->s (p-ttl (it-cat d))))))
+               dropped))
+      (cond ((equal? kind "QUERY") (prov! "retrieve" id key ans "agent" ""))
+            ((equal? kind "PIN") (prov! "pin" -1 key "" "user" ""))
+            (else
+             (obs! (list ts key val cat (if (equal? kind "CORRECT") "correction" src) out id))
+             (if (or (equal? out "rejected") (equal? out "lost-conflict") (equal? out "lost-pinned"))
+                 (prov! out -1 key val src "")
+                 (prov! out id key val (if (equal? kind "CORRECT") "user" src) ""))))
+      (if (equal? kind "CORRECT")
+          (let* ((d (diagnose key val cat ts))
+                 (cands (if (and (equal? noise "1") (not (null? (cadr d))))
+                            (list (list-ref fix-space (modulo (str-hash (cand->str (car (cadr d)))) (length fix-space))))
+                            (cadr d))))
+            (consider! (string-append (car d) " " key) cands))
+          #f)
+      (if (= (modulo ts 50) 49) (size-check! ts) #f)
+      (hash "ts" ts "answer" ans "outcome" out "id" id "propose" (pend->hash) "version" *version*
+            "size" (st-count *items*) "decayed" (length dropped)))))
+
+;; ---------------------------------------------------------------- white-box ops
+(define (all-true xs) (if (null? xs) #t (if (car xs) (all-true (cdr xs)) #f)))
+(define (table-admit c s) (let ((e (assoc (string-append c "\t" s) *admit-table*))) (if e (cdr e) (equal? s "user"))))
+(define (find-item id) (st-find-id *items* id))
+(define (user-op! op id f)
+  (let ((it (find-item id)))
+    (if (not it) (hash "error" (string-append "no item " (n->s id)))
+        (let ((new (f it)))
+          (set! *items* (if new (st-replace *items* new) (st-drop *items* it)))
+          (prov! op id (it-key it) (if new (it-val new) (it-val it)) "user" "white-box")
+          (hash "ok" #t "item" (if new (it->hash new) #f))))))
+
+;; ---------------------------------------------------------------- protocol
+(define (reply h) (display "R ") (display (json-encode h)) (newline))
+(define (field fs i) (if (< i (length fs)) (list-ref fs i) ""))
+(define (fnum fs i) (string->number (field fs i)))
+
+(define (handle fs)
+  (let ((cmd (field fs 0)))
+    (cond
+      ((equal? cmd "EV") (reply (live-event! (field fs 1) (field fs 2) (field fs 3) (field fs 4) (field fs 5) (field fs 6))))
+      ((equal? cmd "GATE") (reply (if *pending* (gate!) (hash "error" "no pending proposal"))))
+      ((equal? cmd "ADDCAND")    ;; extra candidate from an external proposer (e.g. an LLM), same grammar as the learner's
+       (if *pending*
+           (let ((c (list (field fs 1) (field fs 2)
+                          (if (or (equal? (field fs 1) "ttl") (equal? (field fs 1) "promote")) (fnum fs 3) (field fs 3))
+                          (field fs 4))))
+             (if (and (member (car c) (list "admit" "resolve" "ttl" "promote")) (member (cadr c) cats)
+                      (not (noop-cand? c)))
+                 (begin (set! *pending* (cons (append (car *pending*) (list c)) (cdr *pending*)))
+                        (reply (hash "ok" #t "candidates" (map cand->str (car *pending*)))))
+                 (reply (hash "ok" #f "reason" "rejected candidate"))))
+           (reply (hash "error" "no pending proposal"))))
+      ((equal? cmd "APPLY") (reply (if *pending* (apply-ungated!) (hash "error" "no pending proposal"))))
+      ((equal? cmd "LIST")
+       (reply (hash "items" (map it->hash (if (equal? (field fs 1) "") (st->list *items*)
+                                              (st-filter (lambda (i) (equal? (it-cat i) (field fs 1))) *items*))))))
+      ((equal? cmd "GET")
+       (let ((k (field fs 1)))
+         (reply (hash "items" (map it->hash (st-key *items* k))
+                      "observations" (map obs->hash (obs-of k))
+                      "provenance" (map prov->hash (prov-of k))))))
+      ((equal? cmd "EDIT") (reply (user-op! "edit" (fnum fs 1) (lambda (i) (it-set (it-set i 2 (field fs 2)) 11 "user-edit")))))
+      ((equal? cmd "DELETE") (reply (user-op! "delete" (fnum fs 1) (lambda (i) #f))))
+      ((equal? cmd "PIN") (reply (user-op! "pin" (fnum fs 1) (lambda (i) (it-set i 9 #t)))))
+      ((equal? cmd "UNPIN") (reply (user-op! "unpin" (fnum fs 1) (lambda (i) (it-set i 9 #f)))))
+      ((equal? cmd "POLICY")
+       (reply (hash "source" (current-source :workspace) "version" *version*
+                    "compiled" (hash "admit" (compile-admit) "resolve" (compile-resolve) "ttl" (compile-ttl)
+                                     "promote-at" (compile-promote)))))
+      ((equal? cmd "VERSIONS") (reply (hash "versions" (reverse *vlog*) "version" *version*)))
+      ((equal? cmd "FIND")
+       (reply (hash "name" (field fs 1) "node" (let ((r (try (query :find (field fs 1)) (catch (e) #f))))
+                                                  (if (number? r) r #f)))))
+      ((equal? cmd "STATS")
+       (reply (hash "size" (st-count *items*) "events" (length *events*) "observations" (+ (length *obs*) (batches-n))
+                    "provenance" (+ (length *prov*) (batches-n)) "version" *version* "pending" (pend->hash)
+                    "by_cat" (map (lambda (c) (list c (cat-count *items* c))) cats))))
+      ((equal? cmd "CHECK")      ;; workspace policy agrees with the compiled tables (used by tests)
+       (reply (hash "agree" (and (all-true (map (lambda (c) (all-true (map (lambda (s) (eq? (admit c s) (table-admit c s))) srcs))) cats))
+                                 (all-true (map (lambda (c) (and (equal? (resolve c) (tbl-ref *resolve-table* c "latest"))
+                                                                 (= (ttl c) (tbl-ref *ttl-table* c 0))
+                                                                 (= (promote-at c) (tbl-ref *promote-table* c 2)))) cats))))))
+      ((equal? cmd "INDEX")      ;; per-category index next to a full recompute (used by tests)
+       (reply (hash "cats"
+                    (map (lambda (e)
+                           (let* ((c (car e)) (r (cdr e)) (f (rec-f r))
+                                  (xs (st-filter (lambda (i) (equal? (it-cat i) c)) *items*)))
+                             (hash "cat" c "cnt" (rec-cnt r) "cnt_full" (length xs)
+                                   "dead" (rec-dead r) "dead_full" (if (rec-young r) (length (filter (lambda (i) (counted? i f)) xs)) 0)
+                                   "f" f "tq" (q-len (rec-tq r)) "young" (q-len (rec-young r)))))
+                         (st-cx *items*)))))
+      ((equal? cmd "LEARN") (set! *learn* (equal? (field fs 1) "1")) (reply (hash "learn" *learn*)))
+      ((equal? cmd "PING") (reply (hash "pong" #t "version" *version*)))
+      (else (reply (hash "error" (string-append "unknown command: " cmd)))))))
+
+(define (serve)
+  (let ((line (read-line)))
+    (if (or (eof-object? line) (equal? line "QUIT"))
+        #t
+        (begin (handle (string-split line "\t")) (serve)))))
+
+(define (load-policy)
+  (set-code (read-file *policy-path*))
+  (eval-current)
+  (set! *seed-snap* (ast:snapshot "seed")))
+
+(load-policy)
+(reply (hash "ready" #t "seed_snap" *seed-snap* "policy" *policy-path*))
+(serve)

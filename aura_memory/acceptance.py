@@ -20,6 +20,7 @@ CHECKS = {
     "4585": "a host-program loop is not >3x slower after one set-code",
     "4586": "an error inside a map callback reaches try",
     "4611": "the released server's (52c90f4) first GATE (18-event trace) replays and answers KEEP (c6a18e8a5: list-ref out of bounds)",
+    "4625": "a frozen server (sweep-cat fold with set!) + 102-event trace: GET e10 keeps its provenance (c6a18e8a5: index bucket becomes a self-referential cons, provenance lost)",
 }
 
 
