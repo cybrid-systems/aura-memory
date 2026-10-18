@@ -41,7 +41,7 @@ flowchart LR
   end
 ```
 
-* **Store:** items are `(id key val cat src ts last hits tier pinned policy-version by)`. They are indexed by key in a persistent, copy-on-write trie (8-ary, depth 4, 4,096 buckets, built from plain Aura lists). A write path-copies 4 nodes and one bucket and never mutates an existing store value, so a checkpoint is still just the value and forking a worldline for a trial stays O(1). Writes and queries cost O(bucket) instead of O(store) (see [Store scaling](#store-scaling)). The store lives in the control-plane process as Aura data. It is not one workspace define per fact, because per-fact `mutate:rebind` would be far too slow (see the latency section).
+* **Store:** items are `(id key val cat src ts last hits tier pinned policy-version by)`. They are indexed by key in a persistent, copy-on-write trie (8-ary, depth 4, 4,096 buckets, built from plain Aura lists). A write path-copies 4 nodes and one bucket and never mutates an existing store value, so a checkpoint is still just the value and forking a worldline for a trial stays O(1). Writes and queries cost O(bucket) instead of O(store) (see [Store scaling](#store-scaling)). The store value also carries a per-category index (counts, a lazily built expiry queue and a never-retrieved-items counter). That index keeps forgetting, the size check and STATS off O(store) (see [Learning at scale](#learning-at-scale)). The store lives in the control-plane process as Aura data. It is not one workspace define per fact, because per-fact `mutate:rebind` would be far too slow (see the latency section).
 * **Policy:** [`aura/policy_seed.aura`](aura/policy_seed.aura) is a conservative, readable seed. Only the user is admitted. Preferences and facts are `keep-first`, so nothing is silently overwritten and an explicit correction is needed. Nothing is forgotten. Promotion happens after 2 hits. The learner keeps rule tables and compiles them into flat `cond` lambdas for `mutate:rebind`.
 * **Diagnosis:** on a user correction (key, true value), the learner searches the observation log for that value. It is either never seen, rejected by `admit` (from which source), lost to `keep-first`, decayed by `ttl`, or overwritten by a lower-quality source. That yields 1–2 candidate mutations. For example, `lost-conflict` yields `resolve pref latest` and `resolve pref keep-both`. A separate check proposes `ttl` for a category when it holds 12 or more never-retrieved, untouched items (size pressure). A candidate needs at least 2 pieces of evidence. A rejected candidate is blacklisted until its evidence doubles. No-op candidates are dropped.
 * **Gate:** the window starts from the newest checkpoint at least 100 events back. The gate replays it once for the current policy and once per candidate, each in its own worldline. User corrections are labels, not inputs: replay skips them, so a policy must keep memory right on its own. A query's label is the correction value if the user corrected it, otherwise the live answer (implicit acceptance). KEEP requires more labelled queries correct, or the same number with at least 10% less memory. Otherwise the gate calls `ast:restore`.
@@ -69,6 +69,7 @@ scripts/bench.sh --docker --noise 1.0 --modes adaptive adaptive-nogate   # noise
 scripts/in-docker.sh 'python3 -m aura_memory inspect --seed 0 --upto 400' # white-box tour
 scripts/in-docker.sh 'python3 -m aura_memory run --mode adaptive --seed 3' # every verdict of one stream
 scripts/in-docker.sh 'python3 scripts/scale.py --n 20000 --block 4000 --steady 8000 --out results/scale/index-20k.json'  # store scaling
+AURA_HARNESS_MEM=8g scripts/in-docker.sh 'python3 scripts/scale_learn.py --n 20000 --events 600'  # learning on a big store
 ```
 
 `--docker` runs inside `ghcr.io/cybrid-systems/dev:v1.0.9` with `--memory=4g`, `AURA_SANDBOX=off`, `AURA_PIPELINE_STRICT=0`.
@@ -176,6 +177,39 @@ A 600-event stream now takes about 1 s of wall time per mode (was 12–39 s).
   * So the trie is built from lists, and its key hash samples 5 characters (O(1)), because a full fold costs ~50 µs interpreted.
 * **Interpreter overhead dominates what is left.** An empty named-let iteration costs ~2.4 µs on `e50951bff` and ~1.2 µs on `c6a18e8a5` (aura#4599).
 
+### Learning at scale
+
+[`scripts/scale_learn.py`](scripts/scale_learn.py) checks whether the learner, the gate and forgetting stay cheap once memory is big. It fills N never-retrieved episodic items with learning off, then turns learning on and runs 600 live events: writes and queries on 20 hot keys, plus an occasional read of an old item. Fifty events in, the size check sees N dead episodic items and proposes `ttl episodic 60` / `120`. The gate replays the window for each candidate. Both forget nearly the whole store, including old items that queries still read, so the verdict is ROLLBACK at every N. That is the right call, and the scores agree exactly between the old and new servers. Host round trips on `e50951bff`; raw output in `results/scale/learn-*.json` (`*-before` = the 4df7aca server; its 20,000 run is 100 events).
+
+| N items | GATE (old → new) | size-check event, p99 (old → new) | STATS (old → new) | GET key (old → new) | EV p50 (old → new) |
+|---:|---:|---:|---:|---:|---:|
+| 1,000 | 2.9 s → **0.78 s** | 181 ms every 50 events → **3 ms** | 167 → 0.4 ms | 6 → 1.0 ms | 0.67 → 0.78 ms |
+| 4,000 | 9.9 s → **2.0 s** | 418 ms every 50 events → **13 ms** | 357 → 1.3 ms | 29 → 1.3 ms | 0.88 → 1.12 ms |
+| 20,000 | 32.0 s → **9.2 s** | 1,258 ms every 50 events → **4 ms** | 947 → 8 ms | 86 → 1.4 ms | 1.45 → 1.6 ms |
+
+* **The old server paid O(store) in four places.**
+  * The size check counted dead items with 4 full folds every 50 events: 22 µs per item visited, because each one is several interpreted closure calls and `list-ref`s.
+  * Once a ttl existed, every 10th event ran a full-filter sweep, both live and inside every gate replay.
+  * STATS counted categories with folds.
+  * `diagnose` and GET scanned the whole observation and provenance logs.
+  * The gate was also O(n²): the store kept a list of occupied buckets, and every dropped item that emptied a bucket filtered that list.
+* **The new server keeps a per-category index in the store value,** so checkpoints and forked worldlines carry it for free.
+  * A count per category makes STATS O(1).
+  * A lazily built expiry queue holds (last, id, key) entries in `last` order, with lazy invalidation, so a sweep pops only what has expired. The queue is built from the survivors of the first sweep under a new ttl. Sweeps that drop more than 1/8 of the store rebuild the trie in one pass instead of path-copying per item.
+  * A dead-item counter is advanced over a queue of never-retrieved items, so the size check is amortized O(1). The first check pays one O(n) pass: the 166 / 433 / 1,503 ms p99 in the first block.
+  * The occupied-bucket list is gone; whole-store folds walk the trie.
+  * Per-key indexes over the observation and provenance logs (mutable vectors, because the logs are live-only) make `diagnose` and GET O(that key's history).
+  * `INDEX` reports every category's counters next to a full recompute, and the tests check that they always agree under random churn, pins, unpins and kept ttls.
+* **Replies are byte-identical to the old server.** That covers the 5 agent streams (3,130 replies, with 191 decays and 10 gates), 3 seeds of a random white-box stress (pin / unpin / edit / delete / STATS / LIST / GET with ungated and gated ttls), and the gate scores above.
+* **What it costs.**
+  * Plain writes pay for the index and the eager log index. At 20,000 items with learning off (`scale.py`), write p50 is 0.97 ms vs 0.74 ms and query p50 1.00 ms vs 1.10 ms (`results/scale/index-20k-r4.json`).
+  * With learning on, the never-retrieved queue adds a little more (EV p50 1.6 ms at 20,000).
+  * LIST stays O(store), since the output is the store.
+* **Aura shaped it, and these were filed from here:**
+  * **aura#4474 (reopened).** Aura re-marks the whole live heap at least every 32,768 allocations: the #4474 trigger is live/32, capped at 32,768. Above ~1M live objects, every allocation costs O(live heap) again: 100 conses take 320 µs with an empty heap and 1,930 µs with 800k live 12-field lists. In aura-memory this showed up as O(1) bookkeeping that got 2–3× slower as the store grew. So the index allocates as little as possible: closure-free updates, a count-only cell update while a category is untracked, explicit change lists instead of bucket diffs, and lazily built queues.
+  * **aura#4616 (new).** `(map f l1 l2)` silently ignores every list after the first: `f` gets one argument and the result is `()`s, `0`s or partial procedures. Field updates use native `map` with a position counter instead. That costs ~38 µs per 12-field item, against 95 µs for the interpreted copy loop. A retrieval hit's three field updates now take one pass (50 µs instead of 285 µs).
+  * Interpreter overhead is still the floor (aura#4599): about 1 µs per primitive call, so a 12-field functional update costs tens of µs.
+
 ## Caveats
 
 * **The stream is synthetic and designed to stress the seed policy.** Preferences drift, a new trusted source appears, and episodic volume grows. The seed is deliberately conservative (`keep-first`, user-only), which is a defensible white-box default, not a straw man, but the learner only has to find a few rule flips. The "fixed white-box" baseline is my approximation of a PilotDeck-like fixed policy, not PilotDeck itself.
@@ -198,6 +232,8 @@ A 600-event stream now takes about 1 s of wall time per mode (was 12–39 s).
 | cybrid-systems/aura#4611 (open, filed from here) | regression in `c6a18e8a5` (#4599): a `filter` predicate gets the wrong element (`=` on `(car i)` sees a pair). The released server's first GATE dies with `list-ref: index out of bounds` | **pinned to `e50951bff`**, which is unaffected (`c6a18e8a5` FAILs the check) | `acceptance/4611` (PASS on `e50951bff`) |
 | cybrid-systems/aura#4612 (open, filed from here) | `hash-ref` scans every slot, so a miss is O(table size) | the store index doesn't use `(hash)`; the key hash is computed, not memoised | – |
 | cybrid-systems/aura#4613 (open, filed from here) | `vector->list` / `list->vector` / `(hash)` garbage is never reclaimed | trie nodes are lists, not vectors | – |
+| cybrid-systems/aura#4474 (reopened from here) | the reclaimer re-marks the whole live heap every ≤32,768 allocations, so allocation cost grows with the live heap above ~1M objects | the store index is allocation-light (see Learning at scale) | – |
+| cybrid-systems/aura#4616 (new, filed from here) | `(map f l1 l2)` silently ignores every list after the first | field updates use 1-list `map` with a position counter | – |
 | cybrid-systems/aura#4614 (open, filed from here) | no persistent map; std `hash-set` mutates; `vector-copy` is interpreted; no string hash | hand-rolled list trie | – |
 
 `python3 -m aura_memory acceptance` prints PASS/FAIL for each item against `$AURA_BIN`. `memory-cycle` is aura-memory's own snapshot → rebind → restore → byte-identical round trip, and must PASS.
@@ -210,6 +246,7 @@ aura/policy_seed.aura     seed memory-management policy (fixed white-box baselin
 aura/policy_append.aura   append-only baseline policy
 aura/closed_loop_bench.aura  in-process latency micro-benchmark
 scripts/scale.py          store-size scaling (N facts + queries, optional steady phase)
+scripts/scale_learn.py    learning at scale (big store + size check + gate + forgetting)
 aura_memory/              host: stream.py, control.py, agent.py, bench.py, acceptance.py, proposer.py, __main__.py
 acceptance/               Aura issue repros + memory-cycle (4611: frozen 52c90f4 server + GATE trace on stdin)
 results/                  committed bench / noise / latency / acceptance outputs + one example version log
@@ -218,7 +255,7 @@ tests/                    unit tests (stream invariants; white-box ops, provenan
 
 ## Next steps
 
-* The store is indexed (about 1 ms per query, flat to 20,000 items). The next costs are interpreter overhead (aura#4599) and the O(n) whole-store passes that remain: a sweep once a category has a ttl, the size check every 50 events, and LIST/STATS. A per-category index, or a native persistent map (aura#4614), would remove them.
+* The store and its per-category index keep queries at ~1 ms and the size check, forgetting and STATS off O(store) up to 20,000 items. The gate is the next big cost: a trial ttl that forgets most of a 20,000-item store still costs ~4.5 s per candidate (interpreted per-item work). Gate on a sampled window store, or let the gate stop a candidate early once it can't win. Allocation cost rising with heap size (aura#4474) and interpreter overhead (aura#4599) are the Aura-side floors.
 * Move to a newer Aura main once aura#4611 is fixed. `c6a18e8a5` halves loop overhead but breaks the gate.
 * Switch from `AURA_SANDBOX=off` to `aura soft` once aura#4609 is fixed.
 * Use a held-out replay split and sample older windows, so the gate stops judging on the evidence window.

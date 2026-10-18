@@ -58,6 +58,62 @@ class WhiteBoxTest(unittest.TestCase):
         self.assertEqual(m.obs("user.k8", "other", "fact", "user")["outcome"], "lost-conflict")
         self.assertEqual(m.query("user.k8", "fact")["answer"], model["user.k8"][1])
 
+    def assert_index_ok(self):
+        for c in self.m.call("INDEX")["cats"] or []:
+            self.assertEqual(c["cnt"], c["cnt_full"], c)
+            self.assertEqual(c["dead"], c["dead_full"], c)
+            self.assertLessEqual(c["tq"], 2 * c["cnt"] + 64 + 1, c)
+            self.assertLessEqual(c["young"], 2 * c["cnt"] + 64 + 1, c)
+
+    def test_category_index_consistent_under_churn(self):
+        # writes / queries / corrections / pins, white-box edit / delete / pin / unpin, and kept ttls (sweeps):
+        # the per-category counters must always equal a full recompute and the queues must stay bounded
+        import random
+        m, r = self.m, random.Random(7)
+        cats = ["pref", "fact", "project", "episodic"]
+        ids = []
+        for i in range(900):
+            k = f"k{r.randrange(90)}"; c = cats[int(k[1:]) % 4]; x = r.random()
+            if x < 0.5: res = m.obs(k, f"v{r.randrange(5)}", c, r.choice(["user", "teammate"]))
+            elif x < 0.75: res = m.query(k, c)
+            elif x < 0.82: res = m.correct(k, f"v{r.randrange(5)}", c)
+            elif x < 0.84: res = m.pin_key(k, c)
+            else:
+                if not ids: continue
+                op, iid = r.choice(["edit", "delete", "pin", "unpin"]), r.choice(ids)
+                try:
+                    {"edit": lambda: m.edit(iid, "w"), "delete": lambda: m.delete(iid), "pin": lambda: m.pin(iid),
+                     "unpin": lambda: m.unpin(iid)}[op]()
+                except RuntimeError:
+                    pass                      # deleted / decayed id
+                continue
+            if res.get("id", -1) != -1: ids.append(res["id"])
+            if res.get("propose"): m.apply()
+            if i % 100 == 99: self.assert_index_ok()
+        self.assert_index_ok()
+
+    def test_ttl_expiry_exact(self):
+        # 15 episodic items; one pinned, one retrieved. The size check proposes ttl episodic 60; once kept, the next
+        # sweep drops exactly the 13 untouched unpinned items; the unpinned one and the retrieved one (60+ events
+        # stale by then) go at the following sweep
+        m = self.m
+        ids = {f"e{i}": m.obs(f"e{i}", "v", "episodic", "user")["id"] for i in range(15)}
+        m.pin(ids["e3"])
+        res, ts = None, 15
+        while True:
+            res = m.query("e5" if ts == 40 else "nothing", "pref" if ts != 40 else "episodic"); ts = res["ts"]
+            if res.get("propose"): break
+        self.assertIn("ttl\tepisodic\t60", res["propose"]["candidates"])
+        self.assertEqual(m.apply()["chosen"], "ttl\tepisodic\t60")
+        decays = []
+        while ts < 200:
+            res = m.query("nothing", "pref"); ts = res["ts"]
+            if res["decayed"]: decays.append((ts, res["decayed"]))
+            if ts == 105: m.unpin(ids["e3"])
+        self.assertEqual(decays, [(100, 13), (110, 2)])   # 110: e3 (unpinned at 105) + e5 (retrieved at ts 40)
+        self.assertEqual(m.list("episodic"), [])
+        self.assert_index_ok()
+
     def test_edit_pin_delete_are_recorded(self):
         m = self.m
         iid = m.obs("user.pet", "cat:Mochi", "fact", "user")["id"]

@@ -1,0 +1,48 @@
+{
+ "n": 20000,
+ "events": 100,
+ "fill_s": 16.4,
+ "rows": [
+  {
+   "event": 100,
+   "size": 20019,
+   "ev_ms_p50": 1.45,
+   "ev_ms_p99": 1257.54,
+   "ev_ms_max": 1257.54,
+   "rss_mb": 249.4,
+   "wall_s": 34.7
+  }
+ ],
+ "gates": [
+  {
+   "event": 50,
+   "ms": 32042.5,
+   "verdict": "ROLLBACK",
+   "chosen": false,
+   "scores": [
+    {
+     "size": 20016,
+     "correct": 12,
+     "labeled": 12
+    },
+    {
+     "size": 36,
+     "correct": 7,
+     "labeled": 12
+    },
+    {
+     "size": 96,
+     "correct": 7,
+     "labeled": 12
+    }
+   ],
+   "size_before": 20016
+  }
+ ],
+ "ops_ms": {
+  "STATS": 947.1,
+  "LIST": 1917.1,
+  "LIST_cat": 315.8,
+  "GET": 86.2
+ }
+}
