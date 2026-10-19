@@ -1,0 +1,5 @@
+;; cybrid-systems/aura#4631 (filed from aura-memory): hash-set! / hash silently drop the empty-string key
+(define h (hash "" 0 "a" 1))
+(define e (hash))
+(hash-set! e "" 5)
+(display (list (hash-ref h "" 9) (hash-has-key? h "") (hash-ref e "" 9))) (newline)

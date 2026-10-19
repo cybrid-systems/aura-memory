@@ -23,6 +23,8 @@ CHECKS = {
     "4611-current": "the R10 server (frozen) + 103-request recall-stream trace: the first GATE answers KEEP resolve pref latest (c6a18e8a5..39595edd4: list-ref out of bounds, so a bench worker waits forever for the reply)",
     "4629": "2000 (i \"episodic\") pairs built by a tail loop: no element's car is a non-number (c6a18e8a5..39595edd4: 18 elements become self-referential); the store/index/replay build shape",
     "4625": "a frozen server (sweep-cat fold with set!) + 102-event trace: GET e10 keeps its provenance (c6a18e8a5: index bucket becomes a self-referential cons, provenance lost)",
+    "4631": "hash-set! / (hash ...) keep the empty-string key (aura#4631, filed from here)",
+    "4632": "workspace :switch into a once-rebound child costs < 3x a never-rebound one (aura#4632, filed from here)",
 }
 
 

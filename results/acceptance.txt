@@ -1,4 +1,3 @@
-== acceptance on /workspace/aura-main-bin/aura
 PASS  memory-cycle  aura-memory: snapshot, rebind 2 policy defines, restore -> byte-identical source; rebind + keep
       got: (cycle #t #t #t)
 PASS  4583          10 rebinds next to a self-recursive define stay flat (no 4x-per-rebind blow-up)
@@ -17,3 +16,7 @@ PASS  4629          2000 (i "episodic") pairs built by a tail loop: no element's
       got: ()
 PASS  4625          a frozen server (sweep-cat fold with set!) + 102-event trace: GET e10 keeps its provenance (c6a18e8a5: index bucket becomes a self-referential cons, provenance lost)
       got: R {"observations":[{"val":"v","ts":100,"key":"e10","cat":"episodic","outcome":"decayed","src":"user","id":10},{"val":"v","ts":10,"key":"e10","cat":"episodic","o
+FAIL  4631          hash-set! / (hash ...) keep the empty-string key (aura#4631, filed from here)
+      got: (9 #f 9)
+FAIL  4632          workspace :switch into a once-rebound child costs < 3x a never-rebound one (aura#4632, filed from here)
+      got: slow 21ms -> 274ms

@@ -5,6 +5,7 @@
   python3 -m aura_memory inspect --seed 0 --upto 400           # white-box tour: list / get / edit / pin / delete / versions
   python3 -m aura_memory latency                               # in-process micro-benchmark (aura/closed_loop_bench.aura)
   python3 -m aura_memory acceptance                            # Aura issue repros + aura-memory's own rebind/rollback cycle
+  python3 -m aura_memory tenants --seeds 0 1 2 3 --check       # several users through one server, vs one server each
 """
 from __future__ import annotations
 
@@ -81,6 +82,35 @@ def cmd_latency(a):
     return 0
 
 
+def cmd_tenants(a):
+    from .tenants import run_tenants, check
+    m = run_tenants(a.mode, a.seeds, a.n, a.noise, a.order, a.block, a.order_seed)
+    acc = {s: sum(x[3] for x in r["queries"]) / len(r["queries"]) for s, r in m["results"].items()}
+    print(f"{len(a.seeds)} tenants x {a.n} events ({a.mode}, order {a.order}, block {a.block}): wall {m['wall_s']:.1f} s, "
+          f"{m['switches']} switches (p50 {m['switch_ms_p50']:.1f} ms, p99 {m['switch_ms_p99']:.1f} ms), "
+          f"RSS {m['rss_mb'][-1] if m['rss_mb'] else '?'} MB")
+    print("  accuracy", {s: f"{v:.1%}" for s, v in acc.items()},
+          "verdicts", {s: len(r["verdicts"]) for s, r in m["results"].items()})
+    out = {k: v for k, v in m.items() if k != "results"}
+    out["accuracy"] = acc
+    out["verdicts"] = {s: [(v["ts"], v["verdict"], v["chosen"]) for v in r["verdicts"]] for s, r in m["results"].items()}
+    rc = 0
+    if a.check:
+        c = check(a.mode, a.seeds, a.n, a.noise, m)
+        out.update(c)
+        bad = {s: d for s, d in c["diffs"].items() if d}
+        print(f"  own-server reference: {c['ref_wall_s']:.1f} s total; "
+              + ("IDENTICAL for every tenant" if not bad else f"DIFFERENT for tenants {sorted(bad)}"))
+        for s, d in bad.items():
+            for x in d[:4]:
+                print(f"    t{s}: {x}")
+        rc = 1 if bad else 0
+    if a.out:
+        with open(a.out, "w") as fh:
+            json.dump(out, fh, indent=1, default=str)
+    return rc
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="aura_memory")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -105,6 +135,16 @@ def main(argv=None):
     l = sub.add_parser("latency")
     l.add_argument("--n", type=int, default=100)
     sub.add_parser("acceptance")
+    t = sub.add_parser("tenants")
+    t.add_argument("--mode", default="adaptive", choices=MODES)
+    t.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2, 3])
+    t.add_argument("--n", type=int, default=600)
+    t.add_argument("--noise", type=float, default=0.0)
+    t.add_argument("--order", default="rr", choices=["rr", "random"])
+    t.add_argument("--block", type=int, default=1, help="events per turn")
+    t.add_argument("--order-seed", type=int, default=0)
+    t.add_argument("--check", action="store_true", help="also run each stream on its own server and diff")
+    t.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     if a.cmd == "bench":
         if a.recall is not None:
@@ -124,6 +164,8 @@ def main(argv=None):
         return cmd_latency(a)
     elif a.cmd == "acceptance":
         return acceptance.main()
+    elif a.cmd == "tenants":
+        return cmd_tenants(a)
     return 0
 
 

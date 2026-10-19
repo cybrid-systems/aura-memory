@@ -1,0 +1,22 @@
+PASS  memory-cycle  aura-memory: snapshot, rebind 2 policy defines, restore -> byte-identical source; rebind + keep
+      got: (cycle #t #t #t)
+PASS  4583          10 rebinds next to a self-recursive define stay flat (no 4x-per-rebind blow-up)
+      got: (bounded #t)
+PASS  4584          2nd call of a workspace define whose sibling uses filter runs the right define
+      got: (call2 (8 (a)))
+PASS  4585          a host-program loop is not >3x slower after one set-code
+      got: (ratio<3 #t)
+PASS  4586          an error inside a map callback reaches try
+      got: caught
+FAIL  4611          the released server's (52c90f4) first GATE (18-event trace) replays and answers KEEP (c6a18e8a5: list-ref out of bounds)
+      got: error: 481:2: type error: list-ref: index out of bounds
+FAIL  4611-current  the R10 server (frozen) + 103-request recall-stream trace: the first GATE answers KEEP resolve pref latest (c6a18e8a5..39595edd4: list-ref out of bounds, so a bench worker waits forever for the reply)
+      got: error: 894:2: type error: list-ref: index out of bounds
+FAIL  4629          2000 (i "episodic") pairs built by a tail loop: no element's car is a non-number (c6a18e8a5..39595edd4: 18 elements become self-referential); the store/index/replay build shape
+      got: (83 281 467 556 642 885 961 1035 1176 1309 1434 1494 1662 1715 1766 1816 1864 1911)
+FAIL  4625          a frozen server (sweep-cat fold with set!) + 102-event trace: GET e10 keeps its provenance (c6a18e8a5: index bucket becomes a self-referential cons, provenance lost)
+      got: (no match, rc=0)
+FAIL  4631          hash-set! / (hash ...) keep the empty-string key (aura#4631, filed from here)
+      got: (9 #f 9)
+FAIL  4632          workspace :switch into a once-rebound child costs < 3x a never-rebound one (aura#4632, filed from here)
+      got: slow 14ms -> 275ms

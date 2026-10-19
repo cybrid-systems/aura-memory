@@ -64,6 +64,7 @@ flowchart LR
 ```bash
 export AURA_BIN=~/aura/build-rel/aura      # Aura build-rel binary (tested: main e50951bff; c6a18e8a5 and 9f82bede1 break the gate, aura#4611, and corrupt the heap, aura#4625)
 scripts/test.sh --docker                   # unit tests (control-plane tests need AURA_BIN)
+scripts/in-docker.sh 'python3 -m aura_memory tenants --seeds 0 1 2 3 --n 600 --order random --check'   # multi-tenant vs dedicated
 scripts/bench.sh --docker                  # acceptance + in-process latency + 4-mode bench, prints tables
 scripts/bench.sh --docker --noise 1.0 --modes adaptive adaptive-nogate   # noise ablation
 scripts/in-docker.sh 'python3 -m aura_memory inspect --seed 0 --upto 400' # white-box tour
@@ -274,6 +275,28 @@ Baselines on the same streams: fixed 82.7%, append-only 81.4%, adaptive without 
 * **Small-store sweeps.** Bulk expiry now needs at least `AURA_MEMORY_BULK_MIN` (default 256) dropped items. Below that, items are dropped one by one instead of walking all 4,096 trie buckets. Results are identical: gates, STATS, GET probes and sizes in the 20k `scale_learn` run, and every bench table. It helps big stores: 20k `scale_learn` gate 3.23 → 3.03 s, overfit gate 4.94 → 4.60 s (K=0) and 10.8 s (K=2; 16.0 s in R8). On the 600–1,200-event benches the change is within noise.
 * **Current Aura main can't run this.** On `39595edd4` the bench hangs. The current server's first GATE dies with `list-ref: index out of bounds` (6/6 runs; on `e50951bff` it answers `KEEP resolve pref latest`). The error reply never reaches the client, so the worker waits forever. That is aura#4611, which until now was only seen on the released server. `acceptance/4611-current` freezes the server and the 103-request trace.
 
+### Multi-tenant: many users through one control plane
+
+`TENANT name` (R12) switches the server to another user's memory. Every tenant has its own store, logs, learner state and rule tables. They are swapped in and out of the server's globals as one 21-slot vector. Each tenant also has its own policy in a child workspace of the root, created from the seed policy by `workspace :create`. A switch is `workspace :switch` plus the vector swap. Gates, `mutate:rebind`, `ast:snapshot` and `ast:restore` run inside the tenant's workspace. The default tenant `""` is the root workspace.
+
+`python3 -m aura_memory tenants --seeds … --check` interleaves one 1,200- or 300-event adaptive stream per tenant through a single server, either round robin or in random order. It then reruns every stream on a dedicated server and diffs each tenant's answers, outcomes, store sizes, verdicts, version log and final policy source. `results/tenants/`, on `e50951bff`:
+
+| tenants × events, order | switches | switch p50 / p99 | wall (dedicated servers, summed) | RSS at end | diffs vs dedicated |
+|---|---:|---:|---:|---:|---|
+| 4 × 600, round robin | 2,404 | 0.3 / 1.2 ms | 5.9 s (4.8 s) | 122 MB | **0** |
+| 4 × 600, random | 1,792 | 0.4 / 1.2 ms | 5.9 s (5.1 s) | 115 MB | **0** |
+| 16 × 1,200, random | 17,918 | 0.4 / 0.9 ms | 47.2 s (31.8 s) | 237 MB | **0** |
+| 64 × 300, round robin | 19,264 | 0.4 / 0.9 ms | 88.3 s (54.0 s) | 318 MB | **0** |
+| *with `eval-current` after each switch (`AURA_MEMORY_SWITCH_EVAL=1`)* | | | | | |
+| 16 × 1,200, random | 17,918 | 0.8 / 1.4 ms | 53.3 s | **794 MB** | 0 |
+| 16 × 1,200, random, 10 events per turn | 1,799 | 0.9 / 2.9 ms | 38.6 s | 300 MB | 0 |
+| 16 × 1,200, one tenant after another | 32 | – | 33.7 s | 263 MB | – |
+| 64 × 300, round robin | 19,264 | 0.8 / 2.5 ms | 99.7 s | 755 MB | 0 |
+
+* **Isolation is exact.** About 40,000 interleaved switches, including every learner KEEP and ROLLBACK, gave byte-for-byte the same replies as dedicated servers. A workspace switch alone makes the tenant's rebound defines live; `tests/test_tenants.py` checks this with diverging policies in both switch modes. Interleaving costs about 1.5× the summed dedicated wall time, mostly from switch round trips (0.4 ms each, Python framing included).
+* **Where the RSS went.** The first version ran `eval-current` after every switch. On the pin, each `workspace :switch` + `eval-current` into a workspace that has had even one `mutate:rebind` kept ~28 KB. That accounted for all of the growth: 794 MB interleaved vs 263 MB for the same 16 streams run one after another, where the 263 MB is live data at ~10 MB per 1,200-event tenant. A 13-line repro shows it; the leak is gone on `9f82bede1` and later (a398f78a7, #4583). The switch itself stays 5–14× slower after one rebind on current main, filed as **aura#4632**. The server now skips the redundant `eval-current` (`AURA_MEMORY_SWITCH_EVAL=1` restores it). That brings 16 tenants to 237 MB and halves switch latency.
+* **`""` can't be a hash key** (**aura#4631**, filed from here). `hash-set!` and the `hash` constructor silently drop the empty-string key; it is an old guard against a corrupted-string symptom (#2652). The default tenant's saved state vanished with it, so tenant keys are now `"t:" + name`.
+
 ## Caveats
 
 * **The stream is synthetic and designed to stress the seed policy.** Preferences drift, a new trusted source appears, and episodic volume grows. The seed is deliberately conservative (`keep-first`, user-only), which is a defensible white-box default, not a straw man, but the learner only has to find a few rule flips. The "fixed white-box" baseline is my approximation of a PilotDeck-like fixed policy, not PilotDeck itself.
@@ -298,6 +321,8 @@ Baselines on the same streams: fixed 82.7%, append-only 81.4%, adaptive without 
 | cybrid-systems/aura#4629 (open, filed from here) | regression in `c6a18e8a5`, still on `39595edd4`: building a list of pairs with a tail loop leaves 18 of 2,000 elements self-referential. This is the store/index/replay build shape, and probably the root of #4623/#4625/#4627 | **pinned to `e50951bff`** | `acceptance/4629` (PASS on `e50951bff`, FAIL on `39595edd4`) |
 | cybrid-systems/aura#4627 (open, filed from aura-harness) | regression in `c6a18e8a5`: `(equal? (list 1 2) x)` is `#f` on every 66th loop iteration (vectors: every 131st) | pinned; the server compares strings and numbers, which are unaffected | – |
 | cybrid-systems/aura#4628 (open, filed from here) | `member` compares pairs, vectors and floats with `eq?`, although it is documented as `equal?` | `member` is only used on strings | – |
+| cybrid-systems/aura#4631 (new, filed from here) | `hash-set!` / `(hash …)` silently drop the empty-string key (#2652 guard) | tenant keys are `"t:" + name` | `acceptance/4631` (FAIL on the pin and a99ee9571) |
+| cybrid-systems/aura#4632 (new, filed from here) | `workspace :switch` into a workspace that has had one `mutate:rebind` is 5–14× slower on every switch; on the pin, switch + `eval-current` also kept ~28 KB each (fixed on main by a398f78a7) | tenant switches skip `eval-current` (237 MB instead of 794 MB at 16 tenants) | `acceptance/4632` (FAIL on the pin and a99ee9571) |
 | cybrid-systems/aura#4612 (open, filed from here) | `hash-ref` scans every slot, so a miss is O(table size) | the store index doesn't use `(hash)`; the key hash is computed, not memoised | – |
 | cybrid-systems/aura#4613 (open, filed from here) | `vector->list` / `list->vector` / `(hash)` garbage is never reclaimed | trie nodes are lists, not vectors | – |
 | cybrid-systems/aura#4474 (reopened from here) | the reclaimer re-marks the whole live heap every ≤32,768 allocations, so allocation cost grows with the live heap above ~1M objects | the store index, bulk expiry and decay logging are allocation-light (see Learning at scale and the gate early stop section); still present on `9f82bede1` | – |
@@ -316,19 +341,20 @@ aura/closed_loop_bench.aura  in-process latency micro-benchmark
 scripts/scale.py          store-size scaling (N facts + queries, optional steady phase)
 scripts/scale_learn.py    learning at scale (big store + size check + gate + forgetting)
 scripts/holdout_cost.py   held-out gate: overfit candidate vs K, gate time and RSS at N items
-aura_memory/              host: stream.py, control.py, agent.py, bench.py, acceptance.py, proposer.py, __main__.py
+aura_memory/              host: stream.py, control.py, agent.py, bench.py, tenants.py, acceptance.py, proposer.py, __main__.py
 acceptance/               Aura issue repros + memory-cycle (4611 / 4625: frozen server + request trace on stdin; 4629: 3-line list build)
 results/                  committed bench / noise / latency / acceptance outputs + one example version log
-tests/                    unit tests (stream invariants; white-box ops, provenance, KEEP/ROLLBACK against a real Aura)
+tests/                    unit tests (stream invariants; white-box ops, provenance, KEEP/ROLLBACK against a real Aura; tenant isolation)
 ```
 
 ## Next steps
 
 * The gate now stops losing candidates early and allocates little, but a trial still costs ~2 s per candidate at 20,000 items (the checkpoint's store walk plus the trial ttl's first sweep). Next: gate on a sampled window store, so a trial doesn't touch every item. Allocation cost rising with heap size (aura#4474) and interpreter overhead (aura#4599) are the Aura-side floors.
-* Move to a newer Aura main once aura#4629 (list corruption), #4611, #4625 and #4627 are fixed. On `39595edd4` (latest checked) `acceptance/4611`, `4625` and `4629` still FAIL (`results/acceptance-39595edd4.txt`).
+* Move to a newer Aura main once aura#4629 (list corruption), #4611, #4625 and #4627 are fixed. On `a99ee9571` (latest checked; a JIT-only fix since `39595edd4`) `acceptance/4611`, `4611-current`, `4625` and `4629` still FAIL (`results/acceptance-a99ee9571.txt`).
 * Switch from `AURA_SANDBOX=off` to `aura soft` once aura#4609 is fixed.
 * Make the held-out gate cheaper by replaying all candidates in one pass over the held-out windows, then consider turning it on by default. Try K=2 as the default and sample held-out windows from further back than the last K.
 * Let the learner mutate `src-weight` / ranking, and add fuzzy (embedding) retrieval to the data plane.
+* Tenants: add `TENANT-DROP` (delete the workspace and the state vector; check aura#4610 for deleted workspaces), share the seed policy's compiled form across tenants, and try one fiber per tenant once `agent:spawn` is usable.
 * Run more seeds, sweep the noise from 0.3 to 1.0, and try a real conversation log instead of the synthetic stream.
 
 ## License

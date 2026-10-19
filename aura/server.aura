@@ -9,6 +9,7 @@
 ;;   APPLY                           ungated: keep the first pending candidate
 ;;   LIST [cat] | GET key | EDIT id val | DELETE id | PIN id | UNPIN id       white-box memory ops
 ;;   POLICY | VERSIONS | FIND name | STATS | INDEX | LEARN 0|1 | PING | QUIT
+;;   TENANT name | TENANTS        switch to / create another user's memory + policy workspace (R12)
 ;;
 ;; Memory = persistent Aura lists, so a checkpoint (a forked worldline) is O(1): it is the list value itself.
 ;; Policy = workspace defines admit / resolve / ttl / promote-at / src-weight (policy_seed.aura), rewritten by
@@ -814,6 +815,58 @@
           (prov! op id (it-key it) (if new (it-val new) (it-val it)) "user" "white-box")
           (hash "ok" #t "item" (if new (it->hash new) #f))))))
 
+;; ---------------------------------------------------------------- tenants (R12)
+;; TENANT name switches the whole control plane to another user's memory: each tenant has its own store, logs,
+;; learner state and rule tables (swapped in and out of the globals below as one vector) and its own policy defines
+;; in a child workspace of the root (`workspace :create` from the seed policy, then mutate:rebind / ast:snapshot /
+;; ast:restore inside it). The default tenant "" is the root workspace itself. A tenant's replies must be exactly
+;; what a server serving only that tenant would send (tests/test_tenants.py, `bench --tenants`).
+(define *tenant* "")
+;; keys are "t:" + name: hash-set! silently drops the empty-string key, so "" could not be a key (aura#4631)
+(define *tenant-saved* (hash))      ;; key -> state vector of every tenant that is not current
+(define *tenant-ws* (hash "t:" 0))  ;; key -> workspace id
+(define (tkey name) (string-append "t:" name))
+(define *tenant-switches* 0)
+;; eval-current after each tenant workspace :switch: off by default (AURA_MEMORY_SWITCH_EVAL=1 turns it on). The switch
+;; alone already makes the tenant's defines live (tests/test_tenants.py); the extra eval-current kept ~28 KB per switch on
+;; the pin (aura#4632) and doubled switch latency.
+(define *switch-eval* (equal? (getenv "AURA_MEMORY_SWITCH_EVAL") "1"))
+(define (tenant-state)
+  (vector *items* *events* *obs* *prov* *ckpts* *version* *vlog* *learn* *pending* *evidence* *blacklist* *seed-snap*
+          *dead-flag* *obs-ix* *prov-ix* *batches* *pcache* *admit-table* *resolve-table* *ttl-table* *promote-table*))
+(define (tenant-load! v)
+  (set! *items* (vector-ref v 0)) (set! *events* (vector-ref v 1)) (set! *obs* (vector-ref v 2))
+  (set! *prov* (vector-ref v 3)) (set! *ckpts* (vector-ref v 4)) (set! *version* (vector-ref v 5))
+  (set! *vlog* (vector-ref v 6)) (set! *learn* (vector-ref v 7)) (set! *pending* (vector-ref v 8))
+  (set! *evidence* (vector-ref v 9)) (set! *blacklist* (vector-ref v 10)) (set! *seed-snap* (vector-ref v 11))
+  (set! *dead-flag* (vector-ref v 12)) (set! *obs-ix* (vector-ref v 13)) (set! *prov-ix* (vector-ref v 14))
+  (set! *batches* (vector-ref v 15)) (set! *pcache* (vector-ref v 16)) (set! *admit-table* (vector-ref v 17))
+  (set! *resolve-table* (vector-ref v 18)) (set! *ttl-table* (vector-ref v 19)) (set! *promote-table* (vector-ref v 20)))
+(define (tenant-fresh snap)
+  (vector st-empty (list) (list) (list) (list) 0 (list) #t #f (hash) (hash) snap
+          (hash) (make-vector *nb* (list)) (make-vector *nb* (list)) (list) (hash)
+          seed-admit-table seed-resolve-table seed-ttl-table seed-promote-table))
+(define (tenant! name)
+  (if (equal? name *tenant*) (hash "tenant" name "new" #f "ws" (hash-ref *tenant-ws* (tkey name) 0))
+      (let ((new (not (hash-has-key? *tenant-ws* (tkey name)))))
+        (hash-set! *tenant-saved* (tkey *tenant*) (tenant-state))
+        (set! *tenant-switches* (+ *tenant-switches* 1))
+        (if new
+            (begin
+              (workspace :switch 0)
+              (let ((w (workspace :create (string-append "tenant-" name))))
+                (workspace :switch w)
+                (eval-current)
+                (hash-set! *tenant-ws* (tkey name) w)
+                (tenant-load! (tenant-fresh (ast:snapshot (string-append "seed-" name))))))
+            (begin
+              (workspace :switch (hash-ref *tenant-ws* (tkey name) 0))
+              (if *switch-eval* (eval-current) #f)
+              (tenant-load! (hash-ref *tenant-saved* (tkey name) #f))
+              (hash-remove! *tenant-saved* (tkey name))))
+        (set! *tenant* name)
+        (hash "tenant" name "new" new "ws" (hash-ref *tenant-ws* (tkey name) 0)))))
+
 ;; ---------------------------------------------------------------- protocol
 (define (reply h) (display "R ") (display (json-encode h)) (newline))
 (define (field fs i) (if (< i (length fs)) (list-ref fs i) ""))
@@ -875,6 +928,8 @@
                                    "f" f "tq" (q-len (rec-tq r)) "young" (q-len (rec-young r)))))
                          (st-cx *items*)))))
       ((equal? cmd "LEARN") (set! *learn* (equal? (field fs 1) "1")) (reply (hash "learn" *learn*)))
+      ((equal? cmd "TENANT") (reply (tenant! (field fs 1))))
+      ((equal? cmd "TENANTS") (reply (hash "current" *tenant* "switches" *tenant-switches* "count" (hash-length *tenant-ws*))))
       ((equal? cmd "PING") (reply (hash "pong" #t "version" *version*)))
       (else (reply (hash "error" (string-append "unknown command: " cmd)))))))
 
