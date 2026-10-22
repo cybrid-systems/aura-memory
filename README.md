@@ -309,6 +309,15 @@ Baselines on the same streams: fixed 82.7%, append-only 81.4%, adaptive without 
 
 ## Known Aura issues
 
+### Re-check on main `a6c63aa19` (2026-10-22)
+
+Every issue in the table below is closed upstream. On `a6c63aa19` the acceptance suite passes for 4583–4586, 4611, 4611-current, 4625, 4629, 4631 and `memory-cycle`, and quick repros confirm #4609 (`aura soft` accepts `mutate:rebind`), #4612 (a `hash-ref` miss at 40k keys ≈ 1.5 µs), #4616 and #4628. Two things still block the re-pin, so this repo stays on `e50951bff`:
+
+* **aura#4632 (reopened):** a switch round trip into a once-rebound child is still 10× slower (29 → 303 ms per 4,000).
+* **aura#4669 (new, filed from here):** the GATE path dies with `eval_flat: invalid closure` depending on program layout. The released server hits it as soon as `AURA_MEMORY_WINDOW` is set (the Python client always sets it), so the tenant test's dedicated server hangs at its first GATE. `acceptance/4669` (FAIL on `a6c63aa19`, PASS on the pin).
+
+The workarounds listed below stay until the re-pin.
+
 | issue | effect here | status on `e50951bff` | check |
 |---|---|---|---|
 | cybrid-systems/aura#4583 | repeated `mutate:rebind` blows up next to a self-recursive workspace define | fixed upstream. The policy stays flat `cond`s because the learner compiles it from rule tables, not because of the bug | `acceptance/4583` (PASS) |
