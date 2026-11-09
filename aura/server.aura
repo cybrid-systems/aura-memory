@@ -708,11 +708,51 @@
   (or (> (car s) (car b))
       (and (= (car s) (car b)) (< (* 10 (caddr s)) (* 9 (caddr b))))))
 
+;; ---------------------------------------------------------------- v0.2 evo lineage (#4946)
+;; Every learner verdict is also an evo:record! worldline entry, so `aura evo log` / `aura evo report` show the
+;; policy lineage next to the mutate:rebind / ast:restore entries. The parent is the last KEEP in this tenant;
+;; the record id is (version, event ts). A log that is off (AURA_EVO_LOG unset) or a log write that fails must
+;; never break a verdict: evo:record! returns #f when off, and the whole call is under try.
+(define *evo-tip* (hash))
+(define (evo-policy-tip) (hash-ref *evo-tip* *tenant* ""))
+(define (evo-policy-record! kind cands chosen why scores)
+  (try
+    (let* ((now (if (null? *events*) 0 (ev-ts (car *events*))))
+           (id (string-append "p" (n->s *version*) "-" (n->s now)))
+           (parent (evo-policy-tip))
+           (best (let loop ((xs scores) (b #f))
+                   (cond ((null? xs) b)
+                         ((not (hash? (car xs))) (loop (cdr xs) b))
+                         ((or (not b) (> (hash-ref (car xs) "correct" 0) (hash-ref b "correct" 0)))
+                          (loop (cdr xs) (car xs)))
+                         (else (loop (cdr xs) b)))))
+           (obj (if (hash? best)
+                    (hash "correct" (hash-ref best "correct" 0)
+                          "labeled" (hash-ref best "labeled" 0)
+                          "size" (hash-ref best "size" 0))
+                    (hash)))
+           (rec (evo:record! (if (null? cands) "" (cand->str (car cands))) kind why
+                             (hash "why" why "version" *version* "chosen" (if chosen (cand->str chosen) #f)
+                                   "scores" scores)
+                             "" 0
+                             parent
+                             (hash "algo" "memory-policy" "gen" *version* "slot" 0
+                                   "search" "aura-memory" "candidate" id
+                                   "parents" (if (string=? parent "") (list) (list parent))
+                                   "behavior" (hash "tenant" *tenant* "phase" (if (null? *events*) "A" "B"))
+                                   "objectives" obj
+                                   "constraints" (hash "policy-valid" 0)))))
+      (if (and (string? rec) (not (string=? kind "ROLLBACK")))
+          (begin (hash-set! *evo-tip* *tenant* id) rec)
+          rec))
+    (catch (e) #f)))
+
 (define (log-version! kind cands chosen why scores window t0 snap)
   (set! *vlog* (cons (hash "version" *version* "ts" (if (null? *events*) 0 (ev-ts (car *events*))) "verdict" kind
                            "candidates" (map cand->str cands) "chosen" (if chosen (cand->str chosen) #f) "why" why
                            "scores" scores "window" window "ms" (- (current-time-ms) t0) "snap" snap)
-                     *vlog*)))
+                     *vlog*))
+  (evo-policy-record! kind cands chosen why scores))
 
 (define (gate!)
   (let* ((p *pending*) (cands (list-ref p 0)) (why (list-ref p 1)) (sig (list-ref p 2)) (n (list-ref p 3))

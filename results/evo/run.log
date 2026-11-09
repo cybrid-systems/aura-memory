@@ -1,0 +1,78 @@
+== baseline: single-objective KEEP on dev streams
+   24 candidates (4 learned)
+== dev evaluation (candidates x dev streams)
+== EoH-S selection (aura/evo_select.aura)
+   selected ['P03', 'P16', 'P09'] coverage 12.308
+   single best P03 (trio (seed0-4 final)); assignment {'clean': 'P16', 'recall80': 'P03', 'recall120': 'P03'}
+== held-out evaluation
+{
+ "single": {
+  "id": "P03",
+  "note": "trio (seed0-4 final)",
+  "dev_mean": 0.8115116376248069,
+  "heldout_by_dist": {
+   "clean": 0.8293145982422055,
+   "recall80": 0.8095802424569548,
+   "recall120": 0.8066855972414387
+  },
+  "worst": 0.8066855972414387
+ },
+ "portfolio": {
+  "assign": {
+   "clean": "P16",
+   "recall80": "P03",
+   "recall120": "P03"
+  },
+  "heldout_by_dist": {
+   "clean": 0.8549118103502121,
+   "recall80": 0.8095802424569548,
+   "recall120": 0.8066855972414387
+  },
+  "worst": 0.8066855972414387,
+  "oracle_by_dist": {
+   "clean": 0.8549118103502121,
+   "recall80": 0.8095802424569548,
+   "recall120": 0.8066855972414387
+  },
+  "oracle_worst": 0.8066855972414387,
+  "pool_oracle_by_dist": {
+   "clean": 0.8549118103502121,
+   "recall80": 0.8095802424569548,
+   "recall120": 0.8066855972414387
+  },
+  "pool_oracle_worst": 0.8066855972414387
+ },
+ "acceptance": {
+  "ratio": 1.0,
+  "pass": false,
+  "sensitivity": {
+   "0.000": {
+    "single_worst": 0.975,
+    "portfolio_worst": 0.975,
+    "pool_oracle_worst": 1.0,
+    "ratio": 1.0,
+    "pool_oracle_ratio": 1.0256410256410258,
+    "pass": false,
+    "pool_oracle_pass": false
+   },
+   "0.333": {
+    "single_worst": 0.8066855972414387,
+    "portfolio_worst": 0.8066855972414387,
+    "pool_oracle_worst": 0.8066855972414387,
+    "ratio": 1.0,
+    "pool_oracle_ratio": 1.0,
+    "pass": false,
+    "pool_oracle_pass": false
+   },
+   "0.500": {
+    "single_worst": 0.7143703636854322,
+    "portfolio_worst": 0.7143703636854322,
+    "pool_oracle_worst": 0.7205009842976902,
+    "ratio": 1.0,
+    "pool_oracle_ratio": 1.008581851829113,
+    "pass": false,
+    "pool_oracle_pass": false
+   }
+  }
+ }
+}

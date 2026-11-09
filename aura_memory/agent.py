@@ -19,11 +19,12 @@ MODES = ("append", "fixed", "adaptive", "adaptive-nogate")
 
 
 def run(mode: str, seed: int, n: int = 600, noise: float = 0.0, p_correct: float = 0.7,
-        min_evidence: int = 2, window: int = 100) -> dict:
+        min_evidence: int = 2, window: int = 100, recall: int = 0, extra_env: dict | None = None) -> dict:
     policy = "append" if mode == "append" else "seed"
-    m = AuraMemory(policy=policy, learn=mode.startswith("adaptive"), min_evidence=min_evidence, window=window)
+    m = AuraMemory(policy=policy, learn=mode.startswith("adaptive"), min_evidence=min_evidence, window=window,
+                   extra_env=extra_env)
     try:
-        g = steps(m, mode, seed, n, noise, p_correct)
+        g = steps(m, mode, seed, n, noise, p_correct, recall)
         while True:
             try:
                 next(g)
@@ -33,11 +34,12 @@ def run(mode: str, seed: int, n: int = 600, noise: float = 0.0, p_correct: float
         m.close()
 
 
-def steps(m, mode: str, seed: int, n: int = 600, noise: float = 0.0, p_correct: float = 0.7):
+def steps(m, mode: str, seed: int, n: int = 600, noise: float = 0.0, p_correct: float = 0.7,
+          recall: int = 0):
     """One stream against memory `m` (an AuraMemory, or a tenant view of a shared one); yields after each event and
     returns the run's result. Several of these interleave in `tenants.run_tenants`."""
     proposer = get_proposer()
-    evs = stream(seed, n)
+    evs = stream(seed, n, recall=recall)
     q = []          # per query: (ts, phase, cat, correct, stale, empty)
     corrections = 0
     sizes = []

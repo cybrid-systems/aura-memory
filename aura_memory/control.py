@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import select
 import subprocess
 import time
 from pathlib import Path
@@ -33,9 +34,15 @@ def _clean(s) -> str:
 
 
 class AuraMemory:
-    def __init__(self, policy: str = "seed", learn: bool = True, min_evidence: int = 2, window: int = 100):
+    def __init__(self, policy: str = "seed", learn: bool = True, min_evidence: int = 2, window: int = 100,
+                 extra_env: dict | None = None, timeout_s: float = 120.0):
+        self.timeout_s = timeout_s
         aura, env = aura_env()
-        env["AURA_MEMORY_POLICY"] = str(POLICIES[policy])
+        if extra_env:
+            env.update({k: str(v) for k, v in extra_env.items()})
+        # A policy is a name in POLICIES (seed / append) or a path to a policy file: the v0.2-evo
+        # portfolio evaluates learned and candidate policies that live in results/evo/policies/.
+        env["AURA_MEMORY_POLICY"] = str(POLICIES[policy] if policy in POLICIES else Path(policy))
         env["AURA_MEMORY_MIN_EVIDENCE"] = str(min_evidence)
         env["AURA_MEMORY_WINDOW"] = str(window)
         t0 = time.perf_counter()
@@ -52,6 +59,10 @@ class AuraMemory:
 
     def _read(self) -> dict:
         while True:
+            # A control plane that dies or wedges must fail the run instead of blocking the harness forever.
+            ready, _, _ = select.select([self.p.stdout], [], [], self.timeout_s)
+            if not ready:
+                raise RuntimeError(f"aura control plane produced no reply in {self.timeout_s:.0f}s")
             line = self.p.stdout.readline()
             if not line:
                 err = self.p.stderr.read()[-2000:] if self.p.stderr else ""

@@ -1,0 +1,50 @@
+{
+ "coverage": 12.307628222619508,
+ "k": 3,
+ "order": [
+  "c14a50468",
+  "cc4911d32",
+  "cafd47772",
+  "ce23cc0d7",
+  "c2a7791cc",
+  "c5778deb9",
+  "c70883197",
+  "c7a8dad5c",
+  "c53bc9807",
+  "c829af3c9",
+  "cc308e2cc",
+  "c49c2b496",
+  "cd4060740",
+  "c5d223376",
+  "cec16a94b",
+  "caa7fa7e4",
+  "cf0e4e0f3",
+  "ced3ad8ec",
+  "c37a33290",
+  "cdab1b107",
+  "cbb7cc0ea",
+  "c2da7463c",
+  "c3af36e63",
+  "c499035ea"
+ ],
+ "record": "eohs-memory-set#26",
+ "report": {
+  "indices": [
+   3,
+   16,
+   9
+  ]
+ },
+ "scored": 24,
+ "selected": [
+  "P03",
+  "P16",
+  "P09"
+ ],
+ "selected-evo": [
+  "ce23cc0d7",
+  "cf0e4e0f3",
+  "c829af3c9"
+ ],
+ "tip": ""
+}

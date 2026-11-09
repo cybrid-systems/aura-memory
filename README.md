@@ -356,6 +356,22 @@ results/                  committed bench / noise / latency / acceptance outputs
 tests/                    unit tests (stream invariants; white-box ops, provenance, KEEP/ROLLBACK against a real Aura; tenant isolation)
 ```
 
+### v0.2 evo: a complementary policy set (#4946)
+
+`std/evo-core` and `std/proposer` now drive the learner's audit trail and a policy portfolio experiment:
+`aura/evo_select.aura` runs the ask/tell loop and `prop:set-select` (EoH-S, k=3) over a matrix of 24
+policies (the learner's mutation vocabulary plus the final policy of 15 adaptive runs) on three stream
+distributions (clean / recall80 / recall120, 5 dev seeds each). Each learner verdict is also an
+`evo:record!` entry, so `aura evo log --lineage` walks the policy KEEPs.
+
+The set is complementary but the #4946 acceptance fails: on 5 held-out seeds the worst distribution stays
+at 0.8067 (ratio 1.0000, needed 1.05). The set lifts clean by 3.1% (0.8293 to 0.8549) and changes nothing
+on the recall distributions, which are exactly where the single kept policy is already best. Even an oracle
+over the whole 24-policy pool reaches only +2.56% (correctness-only) and 0% at the pre-registered equal
+weights, so the 5% bar is unreachable for this policy/stream family, not missed by the search. Full tables,
+per-seed numbers, the weight sensitivity and the audit trail are in
+[docs/4946-aura-memory-v0.2-evo.md](docs/4946-aura-memory-v0.2-evo.md) and `results/evo/`.
+
 ## Next steps
 
 * The gate now stops losing candidates early and allocates little, but a trial still costs ~2 s per candidate at 20,000 items (the checkpoint's store walk plus the trial ttl's first sweep). Next: gate on a sampled window store, so a trial doesn't touch every item. Allocation cost rising with heap size (aura#4474) and interpreter overhead (aura#4599) are the Aura-side floors.

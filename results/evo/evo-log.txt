@@ -1,0 +1,79 @@
+run eohs-memory-set  (26 candidates: 1 KEEP, 0 ROLLBACK)
+  #1    PROPOSE  record           c14a50468                0.000ms  parent -
+        reason:   ask k=24
+        evidence: candidates=["c14a50468","cc4911d32","cafd47772","ce23cc0d7","c2a7791cc","c5778deb9","c70883197","c7a8dad5c","c53bc9807","c829af3c9","cc308e2cc","c49c2b496","cd4060740","c5d223376","cec16a94b","caa7fa7e4","cf0e4e0f3","ced3ad8ec","c37a33290","cdab1b107","cbb7cc0ea","c2da7463c","c3af36e63","c499035ea"]
+  #2    SCORED   record           c14a50468                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.540884689233736,"mean":0.5545208406102671} violations=0
+  #3    SCORED   record           cc4911d32                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.5757674138368971,"mean":0.5776341199167706} violations=0
+  #4    SCORED   record           cafd47772                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.6572911495662546,"mean":0.6886242011642429} violations=0
+  #5    SCORED   record           ce23cc0d7                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.7899900651541056,"mean":0.8115116376248073} violations=0
+  #6    SCORED   record           c2a7791cc                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.7851135059993628,"mean":0.7919650111866249} violations=0
+  #7    SCORED   record           c5778deb9                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.7601055601055602,"mean":0.7641562519169092} violations=0
+  #8    SCORED   record           c70883197                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.7452152280546535,"mean":0.7462870094520687} violations=0
+  #9    SCORED   record           c7a8dad5c                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.5975639753195827,"mean":0.6411797120257643} violations=0
+  #10   SCORED   record           c53bc9807                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.7707840413346008,"mean":0.7760465554781825} violations=0
+  #11   SCORED   record           c829af3c9                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.7943275108861195,"mean":0.8001778202814125} violations=0
+  #12   SCORED   record           cc308e2cc                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.7806104358095539,"mean":0.7915270192915478} violations=0
+  #13   SCORED   record           c49c2b496                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.5932980247200406,"mean":0.6053961156289289} violations=0
+  #14   SCORED   record           cd4060740                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.5886615439607876,"mean":0.6199384685312216} violations=0
+  #15   SCORED   record           c5d223376                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.7851135059993628,"mean":0.7919650111866249} violations=0
+  #16   SCORED   record           cec16a94b                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.7899900651541056,"mean":0.8115116376248073} violations=0
+  #17   SCORED   record           caa7fa7e4                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.7899900651541056,"mean":0.8115116376248073} violations=0
+  #18   SCORED   record           cf0e4e0f3                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.7099504362302074,"mean":0.7604878495777625} violations=0
+  #19   SCORED   record           ced3ad8ec                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.7553583650152301,"mean":0.7876751985877843} violations=0
+  #20   SCORED   record           c37a33290                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.7895978315462059,"mean":0.7936603157450807} violations=0
+  #21   SCORED   record           cdab1b107                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.6712360568488582,"mean":0.6884063176835463} violations=0
+  #22   SCORED   record           cbb7cc0ea                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.7899900651541056,"mean":0.8115116376248073} violations=0
+  #23   SCORED   record           c2da7463c                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.7851135059993628,"mean":0.7919650111866249} violations=0
+  #24   SCORED   record           c3af36e63                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.7601055601055602,"mean":0.7641562519169092} violations=0
+  #25   SCORED   record           c499035ea                0.000ms  parent -
+        reason:   feasible=1
+        evidence: objectives={"worst":0.7452152280546535,"mean":0.7462870094520687} violations=0
+  #26   KEEP     record           memory-policy-set        0.000ms  parent -
+        reason:   EoH-S coverage 12.307628222619508 over 15 dev streams
+        evidence: coverage=12.307628222619508 selected=["P03","P16","P09"]

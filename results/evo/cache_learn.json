@@ -1,0 +1,462 @@
+{
+ "learn|clean|0": {
+  "accuracy": 0.945273631840796,
+  "dist": "clean",
+  "mode": "adaptive",
+  "seed": 0,
+  "size": 28,
+  "source": "(begin (define admit (lambda (cat src) (if (and (equal? cat \"project\") (equal? src \"teammate\")) #t (if (equal? src \"user\") #t #f)))) (define resolve (lambda (cat) (if (equal? cat \"pref\") \"latest\" (if (equal? cat \"fact\") \"keep-first\" \"latest\")))) (define ttl (lambda (cat) (if (equal? cat \"episodic\") 60 0))) (define promote-at (lambda (cat) 2)) (define src-weight (lambda (src) (if (equal? src \"correction\") 3 (if (equal? src \"user\") 3 (if (equal? src \"teammate\") 1 (if (equal? src \"assistant\") 1 0)))))))",
+  "stale_rate": 0.03980099502487562,
+  "verdicts": [
+   [
+    80,
+    "ROLLBACK",
+    false
+   ],
+   [
+    96,
+    "KEEP",
+    "resolve\tpref\tlatest"
+   ],
+   [
+    294,
+    "KEEP",
+    "ttl\tepisodic\t60"
+   ],
+   [
+    347,
+    "KEEP",
+    "admit\tproject\tteammate\t1"
+   ]
+  ]
+ },
+ "learn|clean|1": {
+  "accuracy": 0.9751243781094527,
+  "dist": "clean",
+  "mode": "adaptive",
+  "seed": 1,
+  "size": 34,
+  "source": "(begin (define admit (lambda (cat src) (if (and (equal? cat \"project\") (equal? src \"teammate\")) #t (if (equal? src \"user\") #t #f)))) (define resolve (lambda (cat) (if (equal? cat \"pref\") \"latest\" (if (equal? cat \"fact\") \"keep-first\" \"latest\")))) (define ttl (lambda (cat) (if (equal? cat \"episodic\") 60 0))) (define promote-at (lambda (cat) 2)) (define src-weight (lambda (src) (if (equal? src \"correction\") 3 (if (equal? src \"user\") 3 (if (equal? src \"teammate\") 1 (if (equal? src \"assistant\") 1 0)))))))",
+  "stale_rate": 0.01990049751243781,
+  "verdicts": [
+   [
+    96,
+    "KEEP",
+    "resolve\tpref\tlatest"
+   ],
+   [
+    246,
+    "KEEP",
+    "ttl\tepisodic\t60"
+   ],
+   [
+    324,
+    "KEEP",
+    "admit\tproject\tteammate\t1"
+   ]
+  ]
+ },
+ "learn|clean|2": {
+  "accuracy": 0.9680365296803652,
+  "dist": "clean",
+  "mode": "adaptive",
+  "seed": 2,
+  "size": 31,
+  "source": "(begin (define admit (lambda (cat src) (if (and (equal? cat \"project\") (equal? src \"teammate\")) #t (if (equal? src \"user\") #t #f)))) (define resolve (lambda (cat) (if (equal? cat \"pref\") \"latest\" (if (equal? cat \"fact\") \"keep-first\" \"latest\")))) (define ttl (lambda (cat) (if (equal? cat \"episodic\") 60 0))) (define promote-at (lambda (cat) 2)) (define src-weight (lambda (src) (if (equal? src \"correction\") 3 (if (equal? src \"user\") 3 (if (equal? src \"teammate\") 1 (if (equal? src \"assistant\") 1 0)))))))",
+  "stale_rate": 0.0182648401826484,
+  "verdicts": [
+   [
+    71,
+    "KEEP",
+    "resolve\tpref\tlatest"
+   ],
+   [
+    296,
+    "KEEP",
+    "ttl\tepisodic\t60"
+   ],
+   [
+    355,
+    "KEEP",
+    "admit\tproject\tteammate\t1"
+   ]
+  ]
+ },
+ "learn|clean|3": {
+  "accuracy": 0.9354838709677419,
+  "dist": "clean",
+  "mode": "adaptive",
+  "seed": 3,
+  "size": 33,
+  "source": "(begin (define admit (lambda (cat src) (if (and (equal? cat \"project\") (equal? src \"teammate\")) #t (if (equal? src \"user\") #t #f)))) (define resolve (lambda (cat) (if (equal? cat \"pref\") \"latest\" (if (equal? cat \"fact\") \"keep-first\" \"latest\")))) (define ttl (lambda (cat) (if (equal? cat \"episodic\") 60 0))) (define promote-at (lambda (cat) 2)) (define src-weight (lambda (src) (if (equal? src \"correction\") 3 (if (equal? src \"user\") 3 (if (equal? src \"teammate\") 1 (if (equal? src \"assistant\") 1 0)))))))",
+  "stale_rate": 0.03225806451612903,
+  "verdicts": [
+   [
+    177,
+    "ROLLBACK",
+    false
+   ],
+   [
+    201,
+    "KEEP",
+    "resolve\tpref\tlatest"
+   ],
+   [
+    295,
+    "KEEP",
+    "ttl\tepisodic\t60"
+   ],
+   [
+    438,
+    "KEEP",
+    "admit\tproject\tteammate\t1"
+   ]
+  ]
+ },
+ "learn|clean|4": {
+  "accuracy": 0.9733333333333334,
+  "dist": "clean",
+  "mode": "adaptive",
+  "seed": 4,
+  "size": 35,
+  "source": "(begin (define admit (lambda (cat src) (if (and (equal? cat \"project\") (equal? src \"teammate\")) #t (if (equal? src \"user\") #t #f)))) (define resolve (lambda (cat) (if (equal? cat \"pref\") \"latest\" (if (equal? cat \"fact\") \"keep-first\" \"latest\")))) (define ttl (lambda (cat) (if (equal? cat \"episodic\") 60 0))) (define promote-at (lambda (cat) 2)) (define src-weight (lambda (src) (if (equal? src \"correction\") 3 (if (equal? src \"user\") 3 (if (equal? src \"teammate\") 1 (if (equal? src \"assistant\") 1 0)))))))",
+  "stale_rate": 0.017777777777777778,
+  "verdicts": [
+   [
+    150,
+    "KEEP",
+    "resolve\tpref\tlatest"
+   ],
+   [
+    346,
+    "KEEP",
+    "ttl\tepisodic\t60"
+   ],
+   [
+    353,
+    "KEEP",
+    "admit\tproject\tteammate\t1"
+   ]
+  ]
+ },
+ "learn|recall120|0": {
+  "accuracy": 0.9473684210526315,
+  "dist": "recall120",
+  "mode": "adaptive",
+  "seed": 0,
+  "size": 51,
+  "source": "(begin (define admit (lambda (cat src) (if (and (equal? cat \"project\") (equal? src \"teammate\")) #t (if (equal? src \"user\") #t #f)))) (define resolve (lambda (cat) (if (equal? cat \"pref\") \"latest\" (if (equal? cat \"fact\") \"keep-first\" \"latest\")))) (define ttl (lambda (cat) (if (equal? cat \"episodic\") 120 0))) (define promote-at (lambda (cat) 2)) (define src-weight (lambda (src) (if (equal? src \"correction\") 3 (if (equal? src \"user\") 3 (if (equal? src \"teammate\") 1 (if (equal? src \"assistant\") 1 0)))))))",
+  "stale_rate": 0.03827751196172249,
+  "verdicts": [
+   [
+    80,
+    "ROLLBACK",
+    false
+   ],
+   [
+    96,
+    "KEEP",
+    "resolve\tpref\tlatest"
+   ],
+   [
+    344,
+    "KEEP",
+    "ttl\tepisodic\t120"
+   ],
+   [
+    359,
+    "KEEP",
+    "admit\tproject\tteammate\t1"
+   ]
+  ]
+ },
+ "learn|recall120|1": {
+  "accuracy": 0.9644670050761421,
+  "dist": "recall120",
+  "mode": "adaptive",
+  "seed": 1,
+  "size": 52,
+  "source": "(begin (define admit (lambda (cat src) (if (and (equal? cat \"project\") (equal? src \"teammate\")) #t (if (equal? src \"user\") #t #f)))) (define resolve (lambda (cat) (if (equal? cat \"pref\") \"latest\" (if (equal? cat \"fact\") \"keep-first\" \"latest\")))) (define ttl (lambda (cat) (if (equal? cat \"episodic\") 120 0))) (define promote-at (lambda (cat) 2)) (define src-weight (lambda (src) (if (equal? src \"correction\") 3 (if (equal? src \"user\") 3 (if (equal? src \"teammate\") 1 (if (equal? src \"assistant\") 1 0)))))))",
+  "stale_rate": 0.02030456852791878,
+  "verdicts": [
+   [
+    96,
+    "KEEP",
+    "resolve\tpref\tlatest"
+   ],
+   [
+    324,
+    "KEEP",
+    "admit\tproject\tteammate\t1"
+   ],
+   [
+    344,
+    "KEEP",
+    "ttl\tepisodic\t120"
+   ]
+  ]
+ },
+ "learn|recall120|2": {
+  "accuracy": 0.954954954954955,
+  "dist": "recall120",
+  "mode": "adaptive",
+  "seed": 2,
+  "size": 55,
+  "source": "(begin (define admit (lambda (cat src) (if (and (equal? cat \"project\") (equal? src \"teammate\")) #t (if (equal? src \"user\") #t #f)))) (define resolve (lambda (cat) (if (equal? cat \"pref\") \"latest\" (if (equal? cat \"fact\") \"keep-first\" \"latest\")))) (define ttl (lambda (cat) (if (equal? cat \"episodic\") 120 0))) (define promote-at (lambda (cat) 2)) (define src-weight (lambda (src) (if (equal? src \"correction\") 3 (if (equal? src \"user\") 3 (if (equal? src \"teammate\") 1 (if (equal? src \"assistant\") 1 0)))))))",
+  "stale_rate": 0.018018018018018018,
+  "verdicts": [
+   [
+    71,
+    "KEEP",
+    "resolve\tpref\tlatest"
+   ],
+   [
+    346,
+    "KEEP",
+    "ttl\tepisodic\t60"
+   ],
+   [
+    355,
+    "KEEP",
+    "admit\tproject\tteammate\t1"
+   ],
+   [
+    386,
+    "KEEP",
+    "ttl\tepisodic\t120"
+   ]
+  ]
+ },
+ "learn|recall120|3": {
+  "accuracy": 0.921875,
+  "dist": "recall120",
+  "mode": "adaptive",
+  "seed": 3,
+  "size": 58,
+  "source": "(begin (define admit (lambda (cat src) (if (and (equal? cat \"project\") (equal? src \"teammate\")) #t (if (equal? src \"user\") #t #f)))) (define resolve (lambda (cat) (if (equal? cat \"pref\") \"latest\" (if (equal? cat \"fact\") \"keep-first\" \"latest\")))) (define ttl (lambda (cat) (if (equal? cat \"episodic\") 120 0))) (define promote-at (lambda (cat) 2)) (define src-weight (lambda (src) (if (equal? src \"correction\") 3 (if (equal? src \"user\") 3 (if (equal? src \"teammate\") 1 (if (equal? src \"assistant\") 1 0)))))))",
+  "stale_rate": 0.052083333333333336,
+  "verdicts": [
+   [
+    241,
+    "ROLLBACK",
+    false
+   ],
+   [
+    271,
+    "KEEP",
+    "resolve\tpref\tlatest"
+   ],
+   [
+    345,
+    "KEEP",
+    "admit\tproject\tteammate\t1"
+   ],
+   [
+    353,
+    "ROLLBACK",
+    false
+   ],
+   [
+    391,
+    "KEEP",
+    "ttl\tepisodic\t60"
+   ],
+   [
+    407,
+    "KEEP",
+    "ttl\tepisodic\t120"
+   ]
+  ]
+ },
+ "learn|recall120|4": {
+  "accuracy": 0.9504504504504504,
+  "dist": "recall120",
+  "mode": "adaptive",
+  "seed": 4,
+  "size": 47,
+  "source": "(begin (define admit (lambda (cat src) (if (and (equal? cat \"project\") (equal? src \"teammate\")) #t (if (equal? src \"user\") #t #f)))) (define resolve (lambda (cat) (if (equal? cat \"pref\") \"latest\" (if (equal? cat \"fact\") \"keep-first\" \"latest\")))) (define ttl (lambda (cat) (if (equal? cat \"episodic\") 120 0))) (define promote-at (lambda (cat) 2)) (define src-weight (lambda (src) (if (equal? src \"correction\") 3 (if (equal? src \"user\") 3 (if (equal? src \"teammate\") 1 (if (equal? src \"assistant\") 1 0)))))))",
+  "stale_rate": 0.018018018018018018,
+  "verdicts": [
+   [
+    149,
+    "KEEP",
+    "resolve\tpref\tlatest"
+   ],
+   [
+    346,
+    "KEEP",
+    "ttl\tepisodic\t60"
+   ],
+   [
+    352,
+    "KEEP",
+    "admit\tproject\tteammate\t1"
+   ],
+   [
+    409,
+    "KEEP",
+    "ttl\tepisodic\t120"
+   ],
+   [
+    429,
+    "ROLLBACK",
+    false
+   ]
+  ]
+ },
+ "learn|recall80|0": {
+  "accuracy": 0.9512195121951219,
+  "dist": "recall80",
+  "mode": "adaptive",
+  "seed": 0,
+  "size": 51,
+  "source": "(begin (define admit (lambda (cat src) (if (and (equal? cat \"project\") (equal? src \"teammate\")) #t (if (equal? src \"user\") #t #f)))) (define resolve (lambda (cat) (if (equal? cat \"pref\") \"latest\" (if (equal? cat \"fact\") \"keep-first\" \"latest\")))) (define ttl (lambda (cat) (if (equal? cat \"episodic\") 120 0))) (define promote-at (lambda (cat) 2)) (define src-weight (lambda (src) (if (equal? src \"correction\") 3 (if (equal? src \"user\") 3 (if (equal? src \"teammate\") 1 (if (equal? src \"assistant\") 1 0)))))))",
+  "stale_rate": 0.03414634146341464,
+  "verdicts": [
+   [
+    80,
+    "ROLLBACK",
+    false
+   ],
+   [
+    96,
+    "KEEP",
+    "resolve\tpref\tlatest"
+   ],
+   [
+    349,
+    "KEEP",
+    "admit\tproject\tteammate\t1"
+   ],
+   [
+    543,
+    "KEEP",
+    "ttl\tepisodic\t120"
+   ]
+  ]
+ },
+ "learn|recall80|1": {
+  "accuracy": 0.9601990049751243,
+  "dist": "recall80",
+  "mode": "adaptive",
+  "seed": 1,
+  "size": 63,
+  "source": "(begin (define admit (lambda (cat src) (if (and (equal? cat \"project\") (equal? src \"teammate\")) #t (if (equal? src \"user\") #t #f)))) (define resolve (lambda (cat) (if (equal? cat \"pref\") \"latest\" (if (equal? cat \"fact\") \"keep-first\" \"latest\")))) (define ttl (lambda (cat) (if (equal? cat \"episodic\") 240 0))) (define promote-at (lambda (cat) 2)) (define src-weight (lambda (src) (if (equal? src \"correction\") 3 (if (equal? src \"user\") 3 (if (equal? src \"teammate\") 1 (if (equal? src \"assistant\") 1 0)))))))",
+  "stale_rate": 0.009950248756218905,
+  "verdicts": [
+   [
+    96,
+    "KEEP",
+    "resolve\tpref\tlatest"
+   ],
+   [
+    330,
+    "KEEP",
+    "admit\tproject\tteammate\t1"
+   ],
+   [
+    345,
+    "ROLLBACK",
+    false
+   ],
+   [
+    545,
+    "KEEP",
+    "ttl\tepisodic\t120"
+   ],
+   [
+    588,
+    "KEEP",
+    "ttl\tepisodic\t240"
+   ]
+  ]
+ },
+ "learn|recall80|2": {
+  "accuracy": 0.968609865470852,
+  "dist": "recall80",
+  "mode": "adaptive",
+  "seed": 2,
+  "size": 55,
+  "source": "(begin (define admit (lambda (cat src) (if (and (equal? cat \"project\") (equal? src \"teammate\")) #t (if (equal? src \"user\") #t #f)))) (define resolve (lambda (cat) (if (equal? cat \"pref\") \"latest\" (if (equal? cat \"fact\") \"keep-first\" \"latest\")))) (define ttl (lambda (cat) (if (equal? cat \"episodic\") 120 0))) (define promote-at (lambda (cat) 2)) (define src-weight (lambda (src) (if (equal? src \"correction\") 3 (if (equal? src \"user\") 3 (if (equal? src \"teammate\") 1 (if (equal? src \"assistant\") 1 0)))))))",
+  "stale_rate": 0.017937219730941704,
+  "verdicts": [
+   [
+    71,
+    "KEEP",
+    "resolve\tpref\tlatest"
+   ],
+   [
+    359,
+    "KEEP",
+    "admit\tproject\tteammate\t1"
+   ],
+   [
+    494,
+    "KEEP",
+    "ttl\tepisodic\t120"
+   ]
+  ]
+ },
+ "learn|recall80|3": {
+  "accuracy": 0.9405940594059405,
+  "dist": "recall80",
+  "mode": "adaptive",
+  "seed": 3,
+  "size": 103,
+  "source": "(begin (define admit (lambda (cat src) (if (and (equal? cat \"project\") (equal? src \"teammate\")) #t (if (equal? src \"user\") #t #f)))) (define resolve (lambda (cat) (if (equal? cat \"pref\") \"latest\" (if (equal? cat \"fact\") \"keep-first\" \"latest\")))) (define ttl (lambda (cat) 0)) (define promote-at (lambda (cat) 2)) (define src-weight (lambda (src) (if (equal? src \"correction\") 3 (if (equal? src \"user\") 3 (if (equal? src \"teammate\") 1 (if (equal? src \"assistant\") 1 0)))))))",
+  "stale_rate": 0.024752475247524754,
+  "verdicts": [
+   [
+    112,
+    "KEEP",
+    "resolve\tpref\tlatest"
+   ],
+   [
+    395,
+    "ROLLBACK",
+    false
+   ],
+   [
+    437,
+    "KEEP",
+    "admit\tproject\tteammate\t1"
+   ],
+   [
+    542,
+    "ROLLBACK",
+    false
+   ]
+  ]
+ },
+ "learn|recall80|4": {
+  "accuracy": 0.9647577092511013,
+  "dist": "recall80",
+  "mode": "adaptive",
+  "seed": 4,
+  "size": 53,
+  "source": "(begin (define admit (lambda (cat src) (if (and (equal? cat \"project\") (equal? src \"teammate\")) #t (if (equal? src \"user\") #t #f)))) (define resolve (lambda (cat) (if (equal? cat \"pref\") \"latest\" (if (equal? cat \"fact\") \"keep-first\" \"latest\")))) (define ttl (lambda (cat) (if (equal? cat \"episodic\") 120 0))) (define promote-at (lambda (cat) 2)) (define src-weight (lambda (src) (if (equal? src \"correction\") 3 (if (equal? src \"user\") 3 (if (equal? src \"teammate\") 1 (if (equal? src \"assistant\") 1 0)))))))",
+  "stale_rate": 0.01762114537444934,
+  "verdicts": [
+   [
+    150,
+    "KEEP",
+    "resolve\tpref\tlatest"
+   ],
+   [
+    342,
+    "KEEP",
+    "admit\tproject\tteammate\t1"
+   ],
+   [
+    444,
+    "ROLLBACK",
+    false
+   ],
+   [
+    544,
+    "KEEP",
+    "ttl\tepisodic\t120"
+   ]
+  ]
+ }
+}

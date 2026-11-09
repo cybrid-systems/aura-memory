@@ -1,0 +1,101 @@
+;; v0.2-evo / #4946: EoH-S set selection over memory-policy candidates.
+;;
+;; The domain evaluator (scripts/evo_portfolio.py) runs the real Aura memory server for every
+;; (candidate policy x development stream) pair and writes one matrix row per candidate. This program is the
+;; search layer only, and it uses std as-is:
+;;   * std/evo-core owns the candidates, the ask/tell loop and the evo log (one v=2 record per candidate);
+;;   * std/proposer's EoH-S (prop:set-select) picks the complementary set of at most k policies.
+;; No search algorithm is reimplemented here.
+;;
+;; Input  (MATRIX env): JSON {"k": 3, "instances": [...], "candidates": [{"id","genome","note","rows":[..]}]}
+;; Output (OUT env):    JSON {"selected": [...], "coverage": x, "tip": id, "order": [...], "scored": n}
+
+(require "std/evo-core" all:)
+(require "std/proposer" all:)
+
+(define matrix (json-parse (read-file (getenv "MATRIX"))))
+(define m-cands (hash-ref matrix "candidates" (list)))
+(define k (hash-ref matrix "k" 3))
+(define instances (hash-ref matrix "instances" (list)))
+
+;; Per candidate: mean score over the development streams, the worst stream, and the mean size. These are the
+;; three #4946 objectives the search sees; the per-instance rows stay available for EoH-S coverage.
+(define (rows-of c) (hash-ref c "rows" (list)))
+(define (mean xs) (if (null? xs) 0.0 (/ (foldl + 0.0 xs) (length xs))))
+(define (min-of xs) (if (null? xs) 0.0 (foldl (lambda (a b) (if (< b a) b a)) (car xs) (cdr xs))))
+
+(define idx (vector 0))
+(define (next-row)
+  (let* ((i (vector-ref idx 0))
+         (c (if (< i (length m-cands)) (list-ref m-cands i) #f)))
+    (vector-set! idx 0 (+ i 1))
+    c))
+
+;; A proposer over the candidate pool, in matrix order. It is a domain input, not a search: it hands
+;; evo-core one already-defined policy genome per slot, with its measured objectives and its lineage root.
+(define (pool-proposer s gen slot rng)
+  (let ((c (next-row)))
+    (if (not c)
+        (hash "genome" "" "thought" "pool exhausted")
+        (hash "genome" (hash-ref c "genome" "")
+              "thought" (hash-ref c "note" "")
+              "objectives" (hash "mean" (mean (rows-of c)) "worst" (min-of (rows-of c)))
+              "behavior" (hash "profile" (hash-ref c "note" ""))
+              "meta" (hash "id" (hash-ref c "id" "") "row" c)))))
+
+(define (lookup-row c)
+  (let ((m (evo:candidate-meta c)))
+    (if (hash? m) (hash-ref m "row" #f) #f)))
+
+(define (evaluator c)
+  (let ((r (lookup-row c)))
+    (if (not r)
+        (hash "status" "error" "error" "no-matrix-row")
+        (hash "status" "ok"
+              "objectives" (hash "mean" (mean (rows-of r)) "worst" (min-of (rows-of r)))
+              "behavior" (hash "profile" (hash-ref r "note" ""))
+              "dur-ms" 0))))
+
+(define s (evo:search (hash "algo" "eoh-s" "seed" 4946 "budget" (length m-cands)
+                            "pop" (max 1 (length m-cands))
+                            "objectives" (list (cons "mean" "max") (cons "worst" "max"))
+                            "proposer" pool-proposer
+                            "target" #f)))
+(evo:run! s evaluator)
+
+;; EoH-S: coverage(S) = sum over development streams of the best score in S. Greedy is (1-1/e)-optimal on this
+;; monotone submodular objective; the same call reports the indices so the report can name them.
+;; evo-core ids are content hashes of the genome, so the matrix row is found through the measured genome.
+(define by-genome (hash))
+(for-each (lambda (c) (hash-set! by-genome (hash-ref c "genome" "") c)) m-cands)
+(define (row-of-id id)
+  (let* ((m (evo:measured s id))
+         (g (if (hash? m) (hash-ref m "genome" "") "")))
+    (hash-ref by-genome g (hash "id" g "rows" (list) "note" g))))
+(define ordered (hash-ref s "tried" (list)))
+(define rows (map (lambda (id) (rows-of (row-of-id id))) ordered))
+(define rep (prop:set-select-report ordered rows k))
+(define sel-ids (hash-ref rep "selected" (list)))
+(define sel (map (lambda (id) (hash-ref (row-of-id id) "id" id)) sel-ids))
+(define cov (hash-ref rep "coverage" 0.0))
+
+;; One evo:record! for the set itself, parented at the search tip: the lineage of the deployed portfolio is in
+;; the same worldline as the per-candidate records.
+(define ev (hash "algo" "eoh-s" "gen" (hash-ref s "gen" 0) "slot" 0
+                 "search" (hash-ref s "id" "")
+                 "candidate" (string-append "set-k" (number->string (length sel)))
+                 "parents" sel
+                 "behavior" (hash "k" (length sel) "instances" (length instances))
+                 "objectives" (hash "coverage" cov)
+                 "constraints" (hash "feasible" 0)))
+(define rec (evo:record! "memory-policy-set" "KEEP"
+                         (string-append "EoH-S coverage " (number->string cov)
+                                        " over " (number->string (length instances)) " dev streams")
+                         (hash "selected" sel "coverage" cov) "" 0 (evo:tip s) ev))
+
+(define out (hash "selected" sel "selected-evo" sel-ids "coverage" cov "k" k
+                  "order" ordered "scored" (hash-ref s "spent" 0)
+                  "tip" (evo:tip s) "record" rec
+                  "report" (hash "indices" (hash-ref rep "indices" (list)))))
+(display (json-encode out))
+(newline)
