@@ -13,7 +13,7 @@
 ;;
 ;; Memory = persistent Aura lists, so a checkpoint (a forked worldline) is O(1): it is the list value itself.
 ;; Policy = workspace defines admit / resolve / ttl / promote-at / src-weight (policy_seed.aura), rewritten by
-;; mutate:rebind from the learner's rule tables and undone with ast:snapshot / ast:restore.
+;; mutate:rebind from the learner's rule tables and undone with (mutate :snapshot) / (mutate :restore).
 
 (define *policy-path* (if (getenv "AURA_MEMORY_POLICY") (getenv "AURA_MEMORY_POLICY") "aura/policy_seed.aura"))
 (define *min-evidence* (if (getenv "AURA_MEMORY_MIN_EVIDENCE") (string->number (getenv "AURA_MEMORY_MIN_EVIDENCE")) 2))
@@ -710,7 +710,7 @@
 
 ;; ---------------------------------------------------------------- v0.2 evo lineage (#4946)
 ;; Every learner verdict is also an evo:record! worldline entry, so `aura evo log` / `aura evo report` show the
-;; policy lineage next to the mutate:rebind / ast:restore entries. The parent is the last KEEP in this tenant;
+;; policy lineage next to the mutate:rebind / mutate :restore entries. The parent is the last KEEP in this tenant;
 ;; the record id is (version, event ts). A log that is off (AURA_EVO_LOG unset) or a log write that fails must
 ;; never break a verdict: evo:record! returns #f when off, and the whole call is under try.
 (define *evo-tip* (hash))
@@ -762,7 +762,7 @@
          (rems (rem-labeled evs))
          (base (replay-bounded citems evs rems -1))
          (t (tables))
-         (snap (ast:snapshot (string-append "gate-" (n->s now))))
+         (snap (mutate :snapshot (string-append "gate-" (n->s now))))
          (hws (if (> *holdout* 0) (holdout-windows cts) (list)))
          ;; (correct labeled) of the current policy, computed on first need; a vector cell, not set! on a captured
          ;; let-local (aura#4625)
@@ -773,7 +773,7 @@
                        (let* ((ok (apply-cand! (car cs)))
                               (s0 (if ok (replay-bounded citems evs rems (if *gate-prune* (car best) -1)) (list -1 0 0 0 #f)))
                               (cho (if (and ok (pair? hws) (better? s0 best)) (holdout-correct hws) #f)))
-                         (ast:restore snap) (eval-current) (set-tables! t) (pc-clear!)
+                         (mutate :restore snap) (eval-current) (set-tables! t) (pc-clear!)
                          (if (and cho (not (vector-ref base-ho 0))) (vector-set! base-ho 0 (holdout-correct hws)))
                          (let* ((bh (vector-ref base-ho 0))
                                 (s (if cho (with-ho s0 (list (car cho) (car bh) (cadr cho) (< (car cho) (car bh)) (length hws) (caddr cho))) s0)))
@@ -858,8 +858,8 @@
 ;; ---------------------------------------------------------------- tenants (R12)
 ;; TENANT name switches the whole control plane to another user's memory: each tenant has its own store, logs,
 ;; learner state and rule tables (swapped in and out of the globals below as one vector) and its own policy defines
-;; in a child workspace of the root (`workspace :create` from the seed policy, then mutate:rebind / ast:snapshot /
-;; ast:restore inside it). The default tenant "" is the root workspace itself. A tenant's replies must be exactly
+;; in a child workspace of the root (`workspace :create` from the seed policy, then mutate:rebind / (mutate :snapshot) /
+;; (mutate :restore) inside it). The default tenant "" is the root workspace itself. A tenant's replies must be exactly
 ;; what a server serving only that tenant would send (tests/test_tenants.py, `bench --tenants`).
 (define *tenant* "")
 ;; keys are "t:" + name: hash-set! silently drops the empty-string key, so "" could not be a key (aura#4631)
@@ -898,7 +898,7 @@
                 (workspace :switch w)
                 (eval-current)
                 (hash-set! *tenant-ws* (tkey name) w)
-                (tenant-load! (tenant-fresh (ast:snapshot (string-append "seed-" name))))))
+                (tenant-load! (tenant-fresh (mutate :snapshot (string-append "seed-" name))))))
             (begin
               (workspace :switch (hash-ref *tenant-ws* (tkey name) 0))
               (if *switch-eval* (eval-current) #f)
@@ -982,7 +982,7 @@
 (define (load-policy)
   (set-code (read-file *policy-path*))
   (eval-current)
-  (set! *seed-snap* (ast:snapshot "seed")))
+  (set! *seed-snap* (mutate :snapshot "seed")))
 
 (load-policy)
 (reply (hash "ready" #t "seed_snap" *seed-snap* "policy" *policy-path*))

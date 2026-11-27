@@ -4,7 +4,7 @@ and (adaptive modes) the Aura learner mutates the memory-management policy, gate
 modes:
   append          RAG-style append-only memory (keep everything, newest mention wins); no learning
   fixed           PilotDeck-like fixed white-box policy (policy_seed.aura) + user corrections; no learning
-  adaptive        seed policy + learner + multi-worldline replay gate (KEEP or ast:restore rollback)
+  adaptive        seed policy + learner + multi-worldline replay gate (KEEP or mutate :restore rollback)
   adaptive-nogate seed policy + learner, every proposal kept
 """
 from __future__ import annotations

@@ -3,7 +3,7 @@
 ;;   plain_loop_*   : a host-program loop before vs after the first set-code (cybrid-systems/aura#4585)
 ;;   policy_call    : one workspace policy call (admit)
 ;;   rebind_eval    : mutate:rebind of `resolve` + eval-current
-;;   trial_cycle    : ast:snapshot -> rebind -> eval-current -> policy call -> ast:restore -> eval-current
+;;   trial_cycle    : (mutate :snapshot) -> rebind -> eval-current -> policy call -> (mutate :restore) -> eval-current
 ;;                    (what the gate pays per candidate worldline, without the replay itself)
 (define N (if (getenv "N") (string->number (getenv "N")) 100))
 (define policy (read-file "aura/policy_seed.aura"))
@@ -22,13 +22,13 @@
 (define r-plain-after (us-per (* 5 N) (lambda (i) (scan))))
 (define r-call (us-per (* 50 N) (lambda (i) (admit "pref" "user"))))
 (define r-rebind-eval (us-per N (lambda (i) (mutate:rebind "resolve" (if (even? i) res-a res-b) "bench") (eval-current))))
-(define r-snapshot (us-per N (lambda (i) (ast:snapshot "bench"))))
-(define s0 (ast:snapshot "base"))
-(define r-restore (us-per N (lambda (i) (ast:restore s0) (eval-current))))
+(define r-snapshot (us-per N (lambda (i) (mutate :snapshot "bench"))))
+(define s0 (mutate :snapshot "base"))
+(define r-restore (us-per N (lambda (i) (mutate :restore s0) (eval-current))))
 (define r-trial (us-per N (lambda (i)
-  (let ((s (ast:snapshot "trial")))
+  (let ((s (mutate :snapshot "trial")))
     (mutate:rebind "resolve" res-a "bench") (eval-current) (resolve "pref")
-    (ast:restore s) (eval-current)))))
+    (mutate :restore s) (eval-current)))))
 (display "BENCH ")
 (display (json-encode (hash "n" N "plain_loop_200_items_before_set_code_us" r-plain-before
                             "plain_loop_200_items_after_set_code_us" r-plain-after
